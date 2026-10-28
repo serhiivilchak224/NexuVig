@@ -1,0 +1,145 @@
+﻿@page "/"
+@inject HttpClient Http
+@using NexuVig.Shared
+@implements IDisposable
+
+<PageTitle>NexuVig - Dashboard</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="display-5">Painel de Monitorização</h1>
+        <span class="badge bg-success">Servidor Online</span>
+    </div>
+
+    <!-- Cartões de Estatísticas -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary h-100 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-uppercase">Total de Equipamentos</h6>
+                    <h2 class="display-6 fw-bold">@equipamentos.Count</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success h-100 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-uppercase">Online</h6>
+                    <h2 class="display-6 fw-bold">@equipamentos.Count(e => (DateTime.UtcNow - e.DataHora).TotalSeconds < 90)</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-danger h-100 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-uppercase">Sem Comunicação</h6>
+                    <h2 class="display-6 fw-bold">@equipamentos.Count(e => (DateTime.UtcNow - e.DataHora).TotalSeconds >= 90)</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-dark bg-warning h-100 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-uppercase">Alertas Ativos</h6>
+                    <h2 class="display-6 fw-bold">0</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Equipamentos -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Equipamentos Recentes</h5>
+            <button class="btn btn-sm btn-outline-light" @onclick="CarregarDados">Atualizar</button>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Equipamento</th>
+                        <th>Estado</th>
+                        <th>CPU</th>
+                        <th>RAM</th>
+                        <th>Última Comunicação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (equipamentos == null || equipamentos.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                À espera de dados... Certifica-te que o Agent e o Server estão a correr.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var pc in equipamentos)
+                        {
+                            var tempoDecorrido = (DateTime.UtcNow - pc.DataHora).TotalSeconds;
+                            var isOnline = tempoDecorrido < 90;
+
+                            <tr>
+                                <td class="fw-bold">@pc.Nome</td>
+                                <td>
+                                    @if (isOnline)
+                                    {
+                                        <span class="badge bg-success">Online</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">Offline</span>
+                                    }
+                                </td>
+                                <td>@pc.UtilizacaoCPU.ToString("F1")%</td>
+                                <td>@pc.UtilizacaoRAM.ToString("F1")%</td>
+                                <td>@pc.DataHora.ToLocalTime().ToString("HH:mm:ss")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<DadosEquipamento> equipamentos = new();
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarDados();
+        // Atualiza a tabela automaticamente a cada 5 segundos
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await CarregarDados();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task CarregarDados()
+    {
+        try
+        {
+            var resposta = await Http.GetFromJsonAsync<List<DadosEquipamento>>("/api/medicoes");
+            if (resposta != null)
+            {
+                equipamentos = resposta;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao ligar ao servidor: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

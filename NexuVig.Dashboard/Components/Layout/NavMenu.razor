@@ -1,0 +1,44 @@
+﻿<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">NexuVig.Dashboard</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="counter">
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="weather">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+            </NavLink>
+        </div>
+    </nav>
+	@inject ServicoIdioma ServicoIdioma
+
+	<div class="px-3 mt-4 mb-3">
+		<button class="btn btn-outline-light btn-sm w-100" @onclick="AlternarIdioma">
+			🌐 @(ServicoIdioma.IdiomaAtual == "PT" ? "Mudar para Inglês" : "Switch to Portuguese")
+		</button>
+	</div>
+
+	@code {
+	private void AlternarIdioma()
+	{
+	ServicoIdioma.MudarIdioma(ServicoIdioma.IdiomaAtual == "PT" ? "EN" : "PT");
+	}
+	}
+</div>
+

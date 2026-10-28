@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="nex/NexuVig.Agent/NexuVig.Agent/NexuVig.Agent.csproj" />
+  <Project Path="nex/NexuVig.Agent/NexuVig.Server/NexuVig.Server.csproj" />
+  <Project Path="nex/NexuVig.Agent/NexuVig.Shared/NexuVig.Shared.csproj" />
+  <Project Path="NexuVig.Dashboard/NexuVig.Dashboard.csproj" />
+</Solution>

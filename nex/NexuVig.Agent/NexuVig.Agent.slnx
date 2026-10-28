@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="NexuVig.Agent/NexuVig.Agent.csproj" />
+  <Project Path="NexuVig.Server/NexuVig.Server.csproj" Id="92cff24c-1e3f-4166-bfc5-49fa4a0bae7e" />
+  <Project Path="NexuVig.Shared/NexuVig.Shared.csproj" Id="eb26a317-68dd-409c-817d-779a40ac7cc1" />
+</Solution>
