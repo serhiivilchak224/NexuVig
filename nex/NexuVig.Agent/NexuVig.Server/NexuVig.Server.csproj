@@ -4,6 +4,7 @@
 		<TargetFramework>net10.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<UserSecretsId>nexuvig-server-6b1f6d0e-3c57-4c0a-9d1b-2f8e5a7c9b41</UserSecretsId>
 	</PropertyGroup>
 
 	<ItemGroup>
