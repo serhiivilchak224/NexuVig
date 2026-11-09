@@ -5,117 +5,116 @@
 
 <PageTitle>NexuVig - @(pc?.Nome ?? "Equipamento")</PageTitle>
 
-<div class="container-fluid mt-4">
-    <a href="/" class="btn btn-sm btn-outline-secondary mb-3">← Voltar ao painel</a>
+<a href="/" class="nv-voltar"><i class="bi bi-arrow-left" aria-hidden="true"></i> Voltar ao painel</a>
 
-    @if (aCarregar)
-    {
-        <p class="text-muted">A carregar...</p>
-    }
-    else if (pc == null)
-    {
-        <div class="alert alert-warning">Equipamento não encontrado.</div>
-    }
-    else
-    {
-        var online = (DateTimeOffset.UtcNow - pc.DataHora).TotalSeconds < 90;
-        var discoLivrePct = pc.DiscoTotalGiB > 0 ? (pc.DiscoLivreGiB / pc.DiscoTotalGiB) * 100 : 100;
-        var tempoLigado = TimeSpan.FromSeconds(pc.TempoLigadoSegundos);
-
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="display-6">@pc.Nome</h1>
-            @if (online)
-            {
-                <span class="badge bg-success fs-6">Online</span>
-            }
-            else
-            {
-                <span class="badge bg-danger fs-6">Sem comunicação</span>
-            }
-        </div>
-
-        <div class="row g-3 mb-4">
-            <div class="col-md-4">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-body">
-                        <h6 class="text-uppercase text-muted">CPU</h6>
-                        <h2 class="@(pc.UtilizacaoCPU > 90 ? "text-danger" : "")">@pc.UtilizacaoCPU.ToString("F0")%</h2>
-                        <small class="text-muted">@pc.Processador</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-body">
-                        <h6 class="text-uppercase text-muted">RAM</h6>
-                        <h2 class="@(pc.UtilizacaoRAM > 90 ? "text-danger" : "")">@pc.UtilizacaoRAM.ToString("F0")%</h2>
-                        <small class="text-muted">
-                            @pc.MemoriaDisponivelGiB.ToString("F1") GiB livres de @pc.MemoriaTotalGiB.ToString("F1") GiB
-                        </small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-body">
-                        <h6 class="text-uppercase text-muted">Disco livre</h6>
-                        <h2 class="@(discoLivrePct < 15 ? "text-danger" : "")">@discoLivrePct.ToString("F1")%</h2>
-                        <small class="text-muted">
-                            @pc.DiscoLivreGiB.ToString("F1") GiB livres de @pc.DiscoTotalGiB.ToString("F1") GiB
-                        </small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card shadow-sm mb-4">
-            <div class="card-header">Informação do equipamento</div>
-            <ul class="list-group list-group-flush">
-                <li class="list-group-item d-flex justify-content-between">
-                    <span class="text-muted">Sistema operativo</span><span>@pc.SistemaOperativo</span>
-                </li>
-                <li class="list-group-item d-flex justify-content-between">
-                    <span class="text-muted">Processador</span><span>@pc.Processador</span>
-                </li>
-                <li class="list-group-item d-flex justify-content-between">
-                    <span class="text-muted">Tempo ligado</span>
-                    <span>@((int)tempoLigado.TotalDays)d @tempoLigado.Hours h @tempoLigado.Minutes min</span>
-                </li>
-                <li class="list-group-item d-flex justify-content-between">
-                    <span class="text-muted">Última comunicação</span>
-                    <span>@pc.DataHora.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</span>
-                </li>
-                <li class="list-group-item d-flex justify-content-between">
-                    <span class="text-muted">Identificador do Agent</span><span class="font-monospace">@pc.AgentId</span>
-                </li>
-            </ul>
-        </div>
-
-        @if (pc.UtilizacaoCPU > 90 || pc.UtilizacaoRAM > 90 || discoLivrePct < 15)
+@if (aCarregar)
+{
+    <div class="nv-cartao nv-vazio">A carregar...</div>
+}
+else if (pc == null)
+{
+    <div class="nv-cartao nv-vazio">
+        <i class="bi bi-question-circle" aria-hidden="true"></i>
+        @if (servidorOnline == false)
         {
-            <div class="alert alert-danger">
-                <strong>Alertas ativos:</strong>
-                @if (pc.UtilizacaoCPU > 90) { <span class="badge bg-danger me-1">CPU alta</span> }
-                @if (pc.UtilizacaoRAM > 90) { <span class="badge bg-danger me-1">RAM alta</span> }
-                @if (discoLivrePct < 15) { <span class="badge bg-warning text-dark">Disco cheio</span> }
-            </div>
+            <div>Não foi possível contactar o Server. Confirma que está a correr.</div>
         }
+        else
+        {
+            <div>Equipamento não encontrado.</div>
+        }
+    </div>
+}
+else
+{
+    var online = Monitorizacao.EstaOnline(pc);
+    var discoLivre = Monitorizacao.PercentagemDiscoLivre(pc);
+    var tempoLigado = TimeSpan.FromSeconds(pc.TempoLigadoSegundos);
+
+    <div class="nv-cabecalho">
+        <div>
+            <h1 class="nv-titulo">@pc.Nome</h1>
+            <div class="nv-subtitulo">Última comunicação @Monitorizacao.TempoDesde(pc.DataHora)</div>
+        </div>
+        <div class="nv-acoes">
+            @if (servidorOnline == false)
+            {
+                <span class="nv-pilula nv-perigo">Servidor offline</span>
+            }
+            <span class="nv-pilula @(online ? "nv-ok" : "nv-perigo")">@(online ? "Online" : "Sem comunicação")</span>
+        </div>
+    </div>
+
+    @if (Monitorizacao.TemAlerta(pc))
+    {
+        <div class="nv-alerta nv-perigo">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+            <span>
+                Alertas ativos:
+                @if (Monitorizacao.CpuAlta(pc)) { <span class="nv-etiqueta nv-perigo">CPU alta</span> }
+                @if (Monitorizacao.RamAlta(pc)) { <span class="nv-etiqueta nv-perigo">RAM alta</span> }
+                @if (Monitorizacao.DiscoCheio(pc)) { <span class="nv-etiqueta nv-aviso">Disco cheio</span> }
+            </span>
+        </div>
     }
-</div>
+
+    <div class="nv-resumo">
+        <div class="nv-cartao nv-metrica">
+            <div class="nv-numero-titulo">
+                <span class="nv-numero-icone" style="color: var(--nv-acento); background: var(--nv-acento-suave);"><i class="bi bi-cpu" aria-hidden="true"></i></span>
+                CPU
+            </div>
+            <div class="nv-metrica-valor">@pc.UtilizacaoCPU.ToString("F0")%</div>
+            <BarraUso Percentagem="pc.UtilizacaoCPU" Texto="" />
+            <div class="nv-metrica-rodape">@pc.Processador</div>
+        </div>
+        <div class="nv-cartao nv-metrica">
+            <div class="nv-numero-titulo">
+                <span class="nv-numero-icone" style="color: var(--nv-acento); background: var(--nv-acento-suave);"><i class="bi bi-memory" aria-hidden="true"></i></span>
+                RAM
+            </div>
+            <div class="nv-metrica-valor">@pc.UtilizacaoRAM.ToString("F0")%</div>
+            <BarraUso Percentagem="pc.UtilizacaoRAM" Texto="" />
+            <div class="nv-metrica-rodape">@pc.MemoriaDisponivelGiB.ToString("F1") GiB livres de @pc.MemoriaTotalGiB.ToString("F1") GiB</div>
+        </div>
+        <div class="nv-cartao nv-metrica">
+            <div class="nv-numero-titulo">
+                <span class="nv-numero-icone" style="color: var(--nv-acento); background: var(--nv-acento-suave);"><i class="bi bi-device-hdd" aria-hidden="true"></i></span>
+                Disco livre @(string.IsNullOrEmpty(pc.UnidadeDisco) ? "" : $"({pc.UnidadeDisco.TrimEnd('\\')})")
+            </div>
+            <div class="nv-metrica-valor">@discoLivre.ToString("F1")%</div>
+            <BarraUso Percentagem="100 - discoLivre" Texto="" />
+            <div class="nv-metrica-rodape">@pc.DiscoLivreGiB.ToString("F1") GiB livres de @pc.DiscoTotalGiB.ToString("F1") GiB</div>
+        </div>
+    </div>
+
+    <div class="nv-cartao">
+        <div class="nv-cartao-cabecalho">Informação do equipamento</div>
+        <ul class="nv-lista">
+            <li><span>Sistema operativo</span><span>@pc.SistemaOperativo</span></li>
+            <li><span>Processador</span><span>@pc.Processador</span></li>
+            <li><span>Endereços IPv4</span><span>@(pc.EnderecosIPv4.Count > 0 ? string.Join(", ", pc.EnderecosIPv4) : "—")</span></li>
+            <li><span>Tempo ligado</span><span>@((int)tempoLigado.TotalDays) d @tempoLigado.Hours h @tempoLigado.Minutes min</span></li>
+            <li><span>Última comunicação</span><span>@pc.DataHora.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</span></li>
+            <li><span>Identificador do Agent</span><span class="font-monospace">@pc.AgentId</span></li>
+        </ul>
+    </div>
+}
 
 @code {
     [Parameter] public string AgentId { get; set; } = "";
 
     private DadosEquipamento? pc;
     private bool aCarregar = true;
-    private System.Threading.Timer? _timer;
+    private bool? servidorOnline;
+    private System.Threading.Timer? temporizador;
 
     protected override async Task OnInitializedAsync()
     {
         await CarregarDados();
         aCarregar = false;
 
-        _timer = new System.Threading.Timer(async _ =>
+        temporizador = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
             {
@@ -131,12 +130,14 @@
         {
             var lista = await Http.GetFromJsonAsync<List<DadosEquipamento>>("/api/medicoes");
             pc = lista?.FirstOrDefault(e => e.AgentId == AgentId);
+            servidorOnline = true;
         }
-        catch (Exception ex)
+        catch (Exception erro)
         {
-            Console.WriteLine($"Erro: {ex.Message}");
+            servidorOnline = false;
+            Console.WriteLine($"Erro ao contactar o Server: {erro.Message}");
         }
     }
 
-    public void Dispose() => _timer?.Dispose();
+    public void Dispose() => temporizador?.Dispose();
 }

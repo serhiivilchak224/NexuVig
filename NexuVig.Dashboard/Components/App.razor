@@ -5,25 +5,46 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    <script>
+        // Aplica o tema guardado antes de a página aparecer (evita um "piscar" de cor).
+        (function () {
+            try {
+                var tema = localStorage.getItem('nexuvig-tema');
+                if (tema === 'light' || tema === 'dark') {
+                    document.documentElement.setAttribute('data-bs-theme', tema);
+                }
+            } catch (e) { }
+        })();
+    </script>
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["NexuVig.Dashboard.styles.css"]" />
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet />
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
 <body>
-    <Routes />
+    @* InteractiveServer: sem isto a página é estática e os botões (@onclick) e a
+       atualização automática não funcionam no browser. *@
+    <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 
     <script>
-        window.alternarTema = function () {
-            var html = document.documentElement;
-            var temaAtual = html.getAttribute('data-bs-theme');
-            html.setAttribute('data-bs-theme', temaAtual === 'dark' ? 'light' : 'dark');
+        window.nexuvigTema = {
+            obter: function () {
+                return document.documentElement.getAttribute('data-bs-theme') || 'dark';
+            },
+            alternar: function () {
+                var html = document.documentElement;
+                var novo = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+                html.setAttribute('data-bs-theme', novo);
+                try { localStorage.setItem('nexuvig-tema', novo); } catch (e) { }
+                return novo;
+            }
         };
     </script>
 </body>

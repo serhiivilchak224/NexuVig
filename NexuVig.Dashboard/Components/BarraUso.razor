@@ -1,0 +1,20 @@
+@* Barra fina de utilização (CPU, RAM ou disco). A cor muda com os limites de aviso e perigo. *@
+
+<div class="nv-uso">
+    @if (Texto != "")
+    {
+        <div class="nv-uso-valor">@(Texto ?? $"{Percentagem:F0}%")</div>
+    }
+    <div class="nv-barra">
+        <div class="nv-barra-preenchida @Monitorizacao.ClasseBarra(Percentagem)"
+             style="width: @(Math.Clamp(Percentagem, 0, 100).ToString("F0", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+    </div>
+</div>
+
+@code {
+    // Percentagem de uso (0 a 100): decide o tamanho e a cor da barra.
+    [Parameter] public double Percentagem { get; set; }
+
+    // Texto a mostrar por cima (por defeito, a própria percentagem; "" esconde o texto).
+    [Parameter] public string? Texto { get; set; }
+}
