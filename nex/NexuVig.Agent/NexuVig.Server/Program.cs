@@ -129,7 +129,9 @@ app.MapPost("/api/medicoes", async (DadosEquipamento dados, NexuVigContext db) =
     computador.Processador = dados.Processador;
     computador.EnderecosIPv4 = dados.EnderecosIPv4 ?? new();
     computador.UnidadeDisco = dados.UnidadeDisco ?? "";
-    computador.UltimaComunicacao = dados.DataHora.UtcDateTime;
+    // Hora do Server (e não a do Agent): o estado online/offline não pode depender
+    // do relógio de cada computador, que pode estar atrasado ou adiantado.
+    computador.UltimaComunicacao = DateTime.UtcNow;
 
     var novaMedicao = new Medicao
     {
