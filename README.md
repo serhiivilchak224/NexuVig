@@ -23,7 +23,7 @@ C# (.NET 10), ASP.NET Core, Blazor, Entity Framework Core, PostgreSQL (Supabase)
 - [x] Agent a enviar medições ao Server
 - [x] Base de dados na nuvem (Supabase)
 - [x] Dashboard com alertas e página de detalhes
-- [x] Agent como Serviço do Windows (falta o teste com reinício)
+- [x] Agent como Serviço do Windows
 - [x] Segurança da API (API Key)
 - [ ] Login e perfis de utilizador
 - [ ] Registo de avarias e intervenções
