@@ -24,15 +24,18 @@ C# (.NET 10), ASP.NET Core, Blazor, Entity Framework Core, PostgreSQL (Supabase)
 - [x] Base de dados na nuvem (Supabase)
 - [x] Dashboard com alertas e página de detalhes
 - [ ] Agent como Serviço do Windows
-- [ ] Segurança da API (API Key)
+- [x] Segurança da API (API Key)
 - [ ] Login e perfis de utilizador
 - [ ] Registo de avarias e intervenções
 - [ ] Instalador do Agent
 
 ## Como executar
 
-1. Configurar a connection string do Supabase nos User Secrets do projeto NexuVig.Server (nunca no código).
-2. Abrir a solução no Visual Studio e executar o Agent, o Server e o Dashboard em conjunto.
+1. Configurar a connection string do Supabase (`ConnectionStrings:SupabaseConnection`) nos User Secrets do projeto NexuVig.Server (nunca no código).
+2. Gerar uma chave de API e guardar a **mesma** chave (`NexuVig:ChaveApi`) nos User Secrets do NexuVig.Server e do NexuVig.Agent. O Agent envia-a no cabeçalho `X-Api-Key`; sem chave válida, o Server responde 401.
+3. Abrir a solução no Visual Studio e executar o Agent, o Server e o Dashboard em conjunto. Ao arrancar, o Server aplica as migrações do Entity Framework (pasta `Migrations`).
+
+Para criar novas migrações: `dotnet tool restore` e depois `dotnet ef migrations add NomeDaMigracao --project nex/NexuVig.Agent/NexuVig.Server --output-dir Migrations`.
 
 ## Autor
 

@@ -79,6 +79,8 @@ app.MapGet("/api/medicoes", async (NexuVigContext db) =>
             Nome = c.Nome,
             SistemaOperativo = c.SistemaOperativo,
             Processador = c.Processador,
+            EnderecosIPv4 = c.EnderecosIPv4,
+            UnidadeDisco = c.UnidadeDisco,
             DataHora = new DateTimeOffset(c.UltimaComunicacao, TimeSpan.Zero),
             UtilizacaoCPU = ultima?.UtilizacaoCPU ?? 0,
             UtilizacaoRAM = ultima?.UtilizacaoRAM ?? 0,
@@ -116,6 +118,9 @@ app.MapPost("/api/medicoes", async (DadosEquipamento dados, NexuVigContext db) =
         db.Computadores.Add(computador);
     }
 
+    // Dados do computador que podem mudar (rede, disco): ficam sempre com o último valor recebido.
+    computador.EnderecosIPv4 = dados.EnderecosIPv4 ?? new();
+    computador.UnidadeDisco = dados.UnidadeDisco ?? "";
     computador.UltimaComunicacao = dados.DataHora.UtcDateTime;
 
     var novaMedicao = new Medicao
