@@ -65,10 +65,23 @@ namespace NexuVig.Agent
                 return;
             }
 
+            string? chaveApi = configuracao["NexuVig:ChaveApi"];
+
+            if (string.IsNullOrWhiteSpace(chaveApi))
+            {
+                logger.LogError(
+                    "Falta a chave NexuVig:ChaveApi na configuração " +
+                    "(User Secrets em desenvolvimento).");
+
+                return;
+            }
+
             using var cliente = new HttpClient
             {
                 Timeout = TimeSpan.FromSeconds(10)
             };
+
+            cliente.DefaultRequestHeaders.Add("X-Api-Key", chaveApi);
 
             var opcoesJSON = new JsonSerializerOptions
             {
@@ -175,8 +188,10 @@ namespace NexuVig.Agent
         private string ObterAgentId()
         {
             string pasta = Path.Combine(
+                // CommonApplicationData (C:\ProgramData): igual para o
+                // Serviço do Windows e para execução normal, o ID não muda.
                 Environment.GetFolderPath(
-                    Environment.SpecialFolder.LocalApplicationData),
+                    Environment.SpecialFolder.CommonApplicationData),
                 "NexuVig");
 
             Directory.CreateDirectory(pasta);
