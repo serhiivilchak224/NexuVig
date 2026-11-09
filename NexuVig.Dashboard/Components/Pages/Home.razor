@@ -11,7 +11,6 @@
         <span class="badge bg-success">Servidor Online</span>
     </div>
 
-    <!-- Cartões de Estatísticas -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
             <div class="card text-white bg-primary h-100 shadow-sm">
@@ -25,7 +24,7 @@
             <div class="card text-white bg-success h-100 shadow-sm">
                 <div class="card-body">
                     <h6 class="card-title text-uppercase">Online</h6>
-                    <h2 class="display-6 fw-bold">@equipamentos.Count(e => (DateTime.UtcNow - e.DataHora).TotalSeconds < 90)</h2>
+                    <h2 class="display-6 fw-bold">@equipamentos.Count(e => EstaOnline(e))</h2>
                 </div>
             </div>
         </div>
@@ -33,7 +32,7 @@
             <div class="card text-white bg-danger h-100 shadow-sm">
                 <div class="card-body">
                     <h6 class="card-title text-uppercase">Sem Comunicação</h6>
-                    <h2 class="display-6 fw-bold">@equipamentos.Count(e => (DateTime.UtcNow - e.DataHora).TotalSeconds >= 90)</h2>
+                    <h2 class="display-6 fw-bold">@equipamentos.Count(e => !EstaOnline(e))</h2>
                 </div>
             </div>
         </div>
@@ -41,35 +40,37 @@
             <div class="card text-dark bg-warning h-100 shadow-sm">
                 <div class="card-body">
                     <h6 class="card-title text-uppercase">Alertas Ativos</h6>
-                    <h2 class="display-6 fw-bold">0</h2>
+                    <h2 class="display-6 fw-bold">@equipamentos.Count(e => TemAlerta(e))</h2>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Tabela de Equipamentos -->
     <div class="card shadow-sm">
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Equipamentos Recentes</h5>
-            <button class="btn btn-sm btn-outline-light" @onclick="CarregarDados">Atualizar</button>
+            <button class="btn btn-sm btn-outline-light" @onclick="ForcarAtualizacao" disabled="@aAtualizar">
+                @(aAtualizar ? "⏳ A atualizar..." : "🔄 Atualizar")
+            </button>
         </div>
         <div class="card-body p-0">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
                         <th>Equipamento</th>
                         <th>Estado</th>
-                        <th>CPU</th>
-                        <th>RAM</th>
-                        <th>Última Comunicação</th>
+                        <th style="width: 15%;">CPU</th>
+                        <th style="width: 15%;">RAM</th>
+                        <th>Disco Livre</th>
+                        <th>Alertas</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (equipamentos == null || equipamentos.Count == 0)
                     {
                         <tr>
-                            <td colspan="5" class="text-center py-4 text-muted">
-                                À espera de dados... Certifica-te que o Agent e o Server estão a correr.
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                À espera de dados...
                             </td>
                         </tr>
                     }
@@ -77,11 +78,13 @@
                     {
                         @foreach (var pc in equipamentos)
                         {
-                            var tempoDecorrido = (DateTime.UtcNow - pc.DataHora).TotalSeconds;
-                            var isOnline = tempoDecorrido < 90;
+                            var isOnline = EstaOnline(pc);
+                            var percentagemDiscoLivre = pc.DiscoTotalGiB > 0 ? (pc.DiscoLivreGiB / pc.DiscoTotalGiB) * 100 : 100;
 
                             <tr>
-                                <td class="fw-bold">@pc.Nome</td>
+                                <td class="fw-bold">
+                                    <a href="/equipamento/@pc.AgentId" class="text-decoration-none">@pc.Nome</a>
+                                </td>
                                 <td>
                                     @if (isOnline)
                                     {
@@ -92,9 +95,32 @@
                                         <span class="badge bg-danger">Offline</span>
                                     }
                                 </td>
-                                <td>@pc.UtilizacaoCPU.ToString("F1")%</td>
-                                <td>@pc.UtilizacaoRAM.ToString("F1")%</td>
-                                <td>@pc.DataHora.ToLocalTime().ToString("HH:mm:ss")</td>
+                                <td>
+                                    <div class="progress position-relative" style="height: 20px;">
+                                        <div class="progress-bar @(pc.UtilizacaoCPU > 90 ? "bg-danger" : "bg-info")"
+                                             role="progressbar" style="width: @(pc.UtilizacaoCPU.ToString("F0"))%"></div>
+                                        <div class="position-absolute top-50 start-50 translate-middle text-white fw-bold" style="font-size: 0.75rem; text-shadow: 1px 1px 2px black;">
+                                            @pc.UtilizacaoCPU.ToString("F0")%
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="progress position-relative" style="height: 20px;">
+                                        <div class="progress-bar @(pc.UtilizacaoRAM > 90 ? "bg-danger" : "bg-warning")"
+                                             role="progressbar" style="width: @(pc.UtilizacaoRAM.ToString("F0"))%"></div>
+                                        <div class="position-absolute top-50 start-50 translate-middle text-white fw-bold" style="font-size: 0.75rem; text-shadow: 1px 1px 2px black;">
+                                            @pc.UtilizacaoRAM.ToString("F0")%
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="@(percentagemDiscoLivre < 15 ? "text-danger fw-bold" : "")">
+                                    @percentagemDiscoLivre.ToString("F1")%
+                                </td>
+                                <td>
+                                    @if (pc.UtilizacaoCPU > 90) { <span class="badge bg-danger me-1">CPU Alta</span> }
+                                    @if (pc.UtilizacaoRAM > 90) { <span class="badge bg-danger me-1">RAM Alta</span> }
+                                    @if (percentagemDiscoLivre < 15) { <span class="badge bg-warning text-dark">Disco Cheio</span> }
+                                </td>
                             </tr>
                         }
                     }
@@ -107,11 +133,11 @@
 @code {
     private List<DadosEquipamento> equipamentos = new();
     private System.Threading.Timer? _timer;
+    private bool aAtualizar = false;
 
     protected override async Task OnInitializedAsync()
     {
         await CarregarDados();
-        // Atualiza a tabela automaticamente a cada 5 segundos
         _timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
@@ -127,19 +153,28 @@
         try
         {
             var resposta = await Http.GetFromJsonAsync<List<DadosEquipamento>>("/api/medicoes");
-            if (resposta != null)
-            {
-                equipamentos = resposta;
-            }
+            if (resposta != null) equipamentos = resposta;
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Erro ao ligar ao servidor: {ex.Message}");
-        }
+        catch (Exception ex) { Console.WriteLine($"Erro: {ex.Message}"); }
     }
 
-    public void Dispose()
+    private async Task ForcarAtualizacao()
     {
-        _timer?.Dispose();
+        aAtualizar = true;
+        StateHasChanged();
+        await CarregarDados();
+        await Task.Delay(500);
+        aAtualizar = false;
+        StateHasChanged();
     }
+
+    private bool EstaOnline(DadosEquipamento pc) => (DateTimeOffset.UtcNow - pc.DataHora).TotalSeconds < 90;
+
+    private bool TemAlerta(DadosEquipamento pc)
+    {
+        var discoLivre = pc.DiscoTotalGiB > 0 ? (pc.DiscoLivreGiB / pc.DiscoTotalGiB) * 100 : 100;
+        return pc.UtilizacaoCPU > 90 || pc.UtilizacaoRAM > 90 || discoLivre < 15;
+    }
+
+    public void Dispose() => _timer?.Dispose();
 }

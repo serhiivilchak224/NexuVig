@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="pt" data-bs-theme="dark">
 
 <head>
     <meta charset="utf-8" />
@@ -18,6 +18,14 @@
     <Routes />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+
+    <script>
+        window.alternarTema = function () {
+            var html = document.documentElement;
+            var temaAtual = html.getAttribute('data-bs-theme');
+            html.setAttribute('data-bs-theme', temaAtual === 'dark' ? 'light' : 'dark');
+        };
+    </script>
 </body>
 
 </html>
