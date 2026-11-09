@@ -42,7 +42,16 @@ C# (.NET 10), ASP.NET Core, Blazor, Entity Framework Core, PostgreSQL (Supabase)
 2. Num PowerShell de administrador: copiar `NexuVig.Agent.exe` e `appsettings.json` para `C:\Program Files\NexuVig\Agent` e criar o serviço com `sc.exe create "NexuVig Agent" binPath= "<pasta>\NexuVig.Agent.exe" start= delayed-auto`.
 3. Como serviço não há User Secrets: a chave vai para a variável `NexuVig__ChaveApi`, guardada no valor `Environment` (REG_MULTI_SZ) de `HKLM\SYSTEM\CurrentControlSet\Services\NexuVig Agent`, que só os administradores conseguem ler.
 4. Os registos do serviço ficam no Visualizador de Eventos (Registos do Windows > Aplicação, origem "NexuVig Agent").
-5. Em testes locais com o certificado de desenvolvimento, a conta LocalSystem só aceita o HTTPS do Server se o certificado for de confiança para o computador (Cert:\LocalMachine\Root). Remover depois dos testes; com o Server online usa-se um certificado verdadeiro.
+5. O serviço corre como LocalSystem, que só aceita o HTTPS do Server se o certificado for de confiança para o computador (Cert:\LocalMachine\Root). Com o Server online usa-se um certificado verdadeiro.
+
+### Testes com outro computador ou máquina virtual
+
+1. O endereço do Server é configurável (`NexuVig:EnderecosServer`; por defeito `https://localhost:7259`). Para aceitar também a rede Host-Only do VirtualBox:
+   `dotnet run --project nex/NexuVig.Agent/NexuVig.Server -- --NexuVig:EnderecosServer='https://localhost:7259;https://192.168.56.1:7259'`
+2. Certificado de testes autoassinado (válido para `localhost`, o nome do PC e os IPs), guardado fora do repositório; o caminho e a password ficam nos User Secrets do Server (`Kestrel:Certificates:Default:Path` e `Kestrel:Certificates:Default:Password`). A parte pública (`.cer`) é importada em `Cert:\LocalMachine\Root` no PC do Server e na VM.
+3. Firewall: abrir a porta 7259 só para a rede da VM (`192.168.56.0/24`).
+4. Na VM: rede "Host-Only", snapshot antes de instalar, e o Agent com `EnderecoServer` = `https://192.168.56.1:7259`.
+5. O Dashboard lê o endereço do Server em `NexuVig:EnderecoServer` (appsettings.json).
 
 Para criar novas migrações: `dotnet tool restore` e depois `dotnet ef migrations add NomeDaMigracao --project nex/NexuVig.Agent/NexuVig.Server --output-dir Migrations`.
 

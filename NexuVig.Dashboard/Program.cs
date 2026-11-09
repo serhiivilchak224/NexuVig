@@ -7,9 +7,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Adiciona esta linha:
 builder.Services.AddScoped<ServicoIdioma>();
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://localhost:7259") });
+
+// Endereço do Server (configurável em appsettings.json: NexuVig:EnderecoServer).
+var enderecoServer = builder.Configuration["NexuVig:EnderecoServer"];
+builder.Services.AddScoped(sp => new HttpClient
+{
+    BaseAddress = new Uri(string.IsNullOrWhiteSpace(enderecoServer) ? "https://localhost:7259" : enderecoServer)
+});
 
 var app = builder.Build();
 

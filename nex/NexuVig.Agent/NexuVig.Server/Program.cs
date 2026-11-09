@@ -11,7 +11,11 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     EnvironmentName = Environments.Development
 });
 
-builder.WebHost.UseUrls("https://localhost:7259");
+// Endereço(s) onde o Server ouve. Por defeito, só no próprio computador.
+// Para testes com outros computadores (ex.: VM), arrancar com
+// --NexuVig:EnderecosServer="https://localhost:7259;https://192.168.56.1:7259"
+var enderecos = builder.Configuration["NexuVig:EnderecosServer"];
+builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(enderecos) ? "https://localhost:7259" : enderecos);
 
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
