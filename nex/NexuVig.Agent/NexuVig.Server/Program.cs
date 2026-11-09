@@ -118,7 +118,11 @@ app.MapPost("/api/medicoes", async (DadosEquipamento dados, NexuVigContext db) =
         db.Computadores.Add(computador);
     }
 
-    // Dados do computador que podem mudar (rede, disco): ficam sempre com o último valor recebido.
+    // Dados do computador que podem mudar (nome, sistema, processador, rede, disco):
+    // ficam sempre com o último valor recebido. O computador é identificado pelo AgentId.
+    computador.Nome = dados.Nome;
+    computador.SistemaOperativo = dados.SistemaOperativo;
+    computador.Processador = dados.Processador;
     computador.EnderecosIPv4 = dados.EnderecosIPv4 ?? new();
     computador.UnidadeDisco = dados.UnidadeDisco ?? "";
     computador.UltimaComunicacao = dados.DataHora.UtcDateTime;
