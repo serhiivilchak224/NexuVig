@@ -71,7 +71,8 @@ namespace NexuVig.Agent
             {
                 logger.LogError(
                     "Falta a chave NexuVig:ChaveApi na configuração " +
-                    "(User Secrets em desenvolvimento).");
+                    "(User Secrets em desenvolvimento; como serviço, " +
+                    "variável NexuVig__ChaveApi no registo do serviço).");
 
                 return;
             }
@@ -102,7 +103,9 @@ namespace NexuVig.Agent
                     string json = JsonSerializer.Serialize(
                         dados, opcoesJSON);
 
-                    logger.LogInformation(
+                    // Debug: aparece na consola em desenvolvimento, mas não
+                    // enche o Visualizador de Eventos a cada 30 segundos.
+                    logger.LogDebug(
                         "Dados recolhidos:\n{Json}", json);
 
                     await EnviarDadosAsync(
