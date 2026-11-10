@@ -25,7 +25,7 @@ C# (.NET 10), ASP.NET Core, Blazor, Entity Framework Core, PostgreSQL (Supabase)
 - [x] Dashboard com alertas e página de detalhes
 - [x] Agent como Serviço do Windows
 - [x] Segurança da API (API Key)
-- [ ] Login e perfis de utilizador
+- [x] Login de administrador no Dashboard (perfis de utilizador por fazer)
 - [ ] Registo de avarias e intervenções
 - [ ] Instalador do Agent
 
@@ -54,6 +54,10 @@ Instala o Agent como uma aplicação normal do Windows: copia os ficheiros para 
 4. Se o Server usar um certificado autoassinado, copiar o `.cer` para `installer\servidor.cer` antes de criar o instalador; é instalado como de confiança no computador. Com um certificado verdadeiro não é preciso.
 5. O computador tem de conseguir chegar ao endereço do Server. O Server a correr noutro computador (ou em `localhost` de outro PC) não é acessível sem rede ou alojamento online.
 6. Verificar que utilizadores normais não leem a chave: `(Get-Acl 'HKLM:\SYSTEM\CurrentControlSet\Services\NexuVig Agent').Access | Format-Table IdentityReference, RegistryRights`.
+
+### Alojamento online (Render)
+
+O Server e o Dashboard podem correr online (Docker, Render), com a base de dados no Supabase. O Dashboard tem login de administrador e o Server exige duas chaves: `NexuVig:ChaveApi` (Agent, envio) e `NexuVig:ChaveDashboard` (Dashboard, leitura). Ficheiros: `Dockerfile.server`, `Dockerfile.dashboard`, `render.yaml`. Passo a passo em [docs/alojamento-render.md](docs/alojamento-render.md).
 
 ### Testes com outro computador ou máquina virtual
 

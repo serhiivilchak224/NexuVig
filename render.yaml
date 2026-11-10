@@ -1,0 +1,36 @@
+# Blueprint do Render: cria o Server e o Dashboard a partir deste repositório.
+# Os valores com "sync: false" são pedidos no painel do Render (nunca ficam no Git).
+services:
+  - type: web
+    name: nexuvig-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile.server
+    dockerContext: .
+    plan: free
+    region: frankfurt
+    healthCheckPath: /
+    envVars:
+      - key: ConnectionStrings__SupabaseConnection
+        sync: false
+      - key: NexuVig__ChaveApi
+        sync: false
+      - key: NexuVig__ChaveDashboard
+        sync: false
+
+  - type: web
+    name: nexuvig-dashboard
+    runtime: docker
+    dockerfilePath: ./Dockerfile.dashboard
+    dockerContext: .
+    plan: free
+    region: frankfurt
+    healthCheckPath: /saude
+    envVars:
+      - key: NexuVig__EnderecoServer
+        sync: false
+      - key: NexuVig__ChaveDashboard
+        sync: false
+      - key: NexuVig__Admin__Utilizador
+        sync: false
+      - key: NexuVig__Admin__Password
+        sync: false
