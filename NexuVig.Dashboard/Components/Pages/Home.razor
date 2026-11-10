@@ -3,123 +3,174 @@
 @using NexuVig.Shared
 @implements IDisposable
 
-<PageTitle>NexuVig - Dashboard</PageTitle>
+<PageTitle>NexuVig - Painel</PageTitle>
 
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="display-5">Painel de Monitorização</h1>
-        <span class="badge bg-success">Servidor Online</span>
-    </div>
-
-    <!-- Cartões de Estatísticas -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card text-white bg-primary h-100 shadow-sm">
-                <div class="card-body">
-                    <h6 class="card-title text-uppercase">Total de Equipamentos</h6>
-                    <h2 class="display-6 fw-bold">@equipamentos.Count</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-success h-100 shadow-sm">
-                <div class="card-body">
-                    <h6 class="card-title text-uppercase">Online</h6>
-                    <h2 class="display-6 fw-bold">@equipamentos.Count(e => (DateTime.UtcNow - e.DataHora).TotalSeconds < 90)</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-danger h-100 shadow-sm">
-                <div class="card-body">
-                    <h6 class="card-title text-uppercase">Sem Comunicação</h6>
-                    <h2 class="display-6 fw-bold">@equipamentos.Count(e => (DateTime.UtcNow - e.DataHora).TotalSeconds >= 90)</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-dark bg-warning h-100 shadow-sm">
-                <div class="card-body">
-                    <h6 class="card-title text-uppercase">Alertas Ativos</h6>
-                    <h2 class="display-6 fw-bold">0</h2>
-                </div>
-            </div>
+<div class="nv-cabecalho">
+    <div>
+        <h1 class="nv-titulo">Painel de monitorização</h1>
+        <div class="nv-subtitulo">
+            @if (ultimaAtualizacao is null)
+            {
+                <span>A carregar dados...</span>
+            }
+            else
+            {
+                <span>Atualizado às @ultimaAtualizacao.Value.ToLocalTime().ToString("HH:mm:ss") · atualiza sozinho a cada @SegundosEntreAtualizacoes s</span>
+            }
         </div>
     </div>
 
-    <!-- Tabela de Equipamentos -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Equipamentos Recentes</h5>
-            <button class="btn btn-sm btn-outline-light" @onclick="CarregarDados">Atualizar</button>
+    <div class="nv-acoes">
+        @if (servidorOnline is null)
+        {
+            <span class="nv-pilula nv-neutro">A ligar ao servidor</span>
+        }
+        else if (servidorOnline == true)
+        {
+            <span class="nv-pilula nv-ok">Servidor online</span>
+        }
+        else
+        {
+            <span class="nv-pilula nv-perigo" title="O Dashboard não conseguiu contactar o Server.">Servidor offline</span>
+        }
+
+        <button class="nv-botao" @onclick="ForcarAtualizacao">
+            <i class="bi bi-arrow-clockwise @(aAtualizar ? "nv-gira" : "")" aria-hidden="true"></i>
+            @(aAtualizar ? "A atualizar..." : "Atualizar")
+        </button>
+    </div>
+</div>
+
+<div class="nv-resumo">
+    <div class="nv-cartao nv-numero">
+        <div class="nv-numero-titulo">
+            <span class="nv-numero-icone" style="color: var(--nv-acento); background: var(--nv-acento-suave);"><i class="bi bi-pc-display" aria-hidden="true"></i></span>
+            Equipamentos
         </div>
-        <div class="card-body p-0">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
+        <div class="nv-numero-valor">@equipamentos.Count</div>
+    </div>
+    <div class="nv-cartao nv-numero">
+        <div class="nv-numero-titulo">
+            <span class="nv-numero-icone nv-ok"><i class="bi bi-wifi" aria-hidden="true"></i></span>
+            Online
+        </div>
+        <div class="nv-numero-valor">@equipamentos.Count(Monitorizacao.EstaOnline)</div>
+    </div>
+    <div class="nv-cartao nv-numero">
+        <div class="nv-numero-titulo">
+            <span class="nv-numero-icone nv-perigo"><i class="bi bi-wifi-off" aria-hidden="true"></i></span>
+            Sem comunicação
+        </div>
+        <div class="nv-numero-valor">@equipamentos.Count(e => !Monitorizacao.EstaOnline(e))</div>
+    </div>
+    <div class="nv-cartao nv-numero">
+        <div class="nv-numero-titulo">
+            <span class="nv-numero-icone nv-aviso"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span>
+            Alertas ativos
+        </div>
+        <div class="nv-numero-valor">@equipamentos.Count(Monitorizacao.TemAlerta)</div>
+    </div>
+</div>
+
+<div class="nv-cartao">
+    <div class="nv-cartao-cabecalho">
+        <span>Equipamentos</span>
+        <span class="nv-subtitulo" style="margin: 0; font-weight: 400;">@equipamentos.Count no total</span>
+    </div>
+
+    @if (equipamentos.Count == 0)
+    {
+        <div class="nv-vazio">
+            <i class="bi bi-pc-display" aria-hidden="true"></i>
+            @if (servidorOnline == false)
+            {
+                <div>Não foi possível contactar o Server. Confirma que está a correr.</div>
+            }
+            else
+            {
+                <div>Ainda não há equipamentos. Aparecem aqui depois da primeira medição do Agent.</div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="nv-tabela-scroll">
+            <table class="nv-tabela">
+                <thead>
                     <tr>
                         <th>Equipamento</th>
                         <th>Estado</th>
                         <th>CPU</th>
                         <th>RAM</th>
-                        <th>Última Comunicação</th>
+                        <th>Disco livre</th>
+                        <th>Alertas</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @if (equipamentos == null || equipamentos.Count == 0)
+                    @foreach (var pc in EquipamentosOrdenados)
                     {
-                        <tr>
-                            <td colspan="5" class="text-center py-4 text-muted">
-                                À espera de dados... Certifica-te que o Agent e o Server estão a correr.
+                        var online = Monitorizacao.EstaOnline(pc);
+                        var discoLivre = Monitorizacao.PercentagemDiscoLivre(pc);
+                        var ip = Monitorizacao.IpPrincipal(pc);
+
+                        <tr class="@(online ? "" : "nv-desligado")">
+                            <td>
+                                <a class="nv-nome" href="/equipamento/@pc.AgentId">@pc.Nome</a>
+                                <div class="nv-detalhe">
+                                    @(ip ?? "sem IP") · @Monitorizacao.TempoDesde(pc.DataHora)
+                                </div>
+                            </td>
+                            <td>
+                                <span class="nv-pilula @(online ? "nv-ok" : "nv-perigo")">@(online ? "Online" : "Offline")</span>
+                            </td>
+                            <td>
+                                <BarraUso Percentagem="pc.UtilizacaoCPU" />
+                            </td>
+                            <td>
+                                <BarraUso Percentagem="pc.UtilizacaoRAM" />
+                            </td>
+                            <td>
+                                <BarraUso Percentagem="100 - discoLivre" Texto="@($"{discoLivre:F1}%")" />
+                            </td>
+                            <td>
+                                @if (Monitorizacao.CpuAlta(pc)) { <span class="nv-etiqueta nv-perigo">CPU alta</span> }
+                                @if (Monitorizacao.RamAlta(pc)) { <span class="nv-etiqueta nv-perigo">RAM alta</span> }
+                                @if (Monitorizacao.DiscoCheio(pc)) { <span class="nv-etiqueta nv-aviso">Disco cheio</span> }
+                                @if (!Monitorizacao.TemAlerta(pc)) { <span class="nv-detalhe">—</span> }
                             </td>
                         </tr>
-                    }
-                    else
-                    {
-                        @foreach (var pc in equipamentos)
-                        {
-                            var tempoDecorrido = (DateTime.UtcNow - pc.DataHora).TotalSeconds;
-                            var isOnline = tempoDecorrido < 90;
-
-                            <tr>
-                                <td class="fw-bold">@pc.Nome</td>
-                                <td>
-                                    @if (isOnline)
-                                    {
-                                        <span class="badge bg-success">Online</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-danger">Offline</span>
-                                    }
-                                </td>
-                                <td>@pc.UtilizacaoCPU.ToString("F1")%</td>
-                                <td>@pc.UtilizacaoRAM.ToString("F1")%</td>
-                                <td>@pc.DataHora.ToLocalTime().ToString("HH:mm:ss")</td>
-                            </tr>
-                        }
                     }
                 </tbody>
             </table>
         </div>
-    </div>
+    }
 </div>
 
 @code {
+    private const int SegundosEntreAtualizacoes = 5;
+
     private List<DadosEquipamento> equipamentos = new();
-    private System.Threading.Timer? _timer;
+    private bool? servidorOnline;
+    private DateTimeOffset? ultimaAtualizacao;
+    private bool aAtualizar;
+    private System.Threading.Timer? temporizador;
+
+    // Online primeiro, depois por nome.
+    private IEnumerable<DadosEquipamento> EquipamentosOrdenados =>
+        equipamentos.OrderByDescending(Monitorizacao.EstaOnline).ThenBy(e => e.Nome);
 
     protected override async Task OnInitializedAsync()
     {
         await CarregarDados();
-        // Atualiza a tabela automaticamente a cada 5 segundos
-        _timer = new System.Threading.Timer(async _ =>
+
+        temporizador = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
             {
                 await CarregarDados();
                 StateHasChanged();
             });
-        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        }, null, TimeSpan.FromSeconds(SegundosEntreAtualizacoes), TimeSpan.FromSeconds(SegundosEntreAtualizacoes));
     }
 
     private async Task CarregarDados()
@@ -127,19 +178,30 @@
         try
         {
             var resposta = await Http.GetFromJsonAsync<List<DadosEquipamento>>("/api/medicoes");
-            if (resposta != null)
-            {
-                equipamentos = resposta;
-            }
+            equipamentos = resposta ?? new();
+            servidorOnline = true;
+            ultimaAtualizacao = DateTimeOffset.UtcNow;
         }
-        catch (Exception ex)
+        catch (Exception erro)
         {
-            Console.WriteLine($"Erro ao ligar ao servidor: {ex.Message}");
+            // Mantém os últimos dados no ecrã e mostra que o Server não respondeu.
+            servidorOnline = false;
+            Console.WriteLine($"Erro ao contactar o Server: {erro.Message}");
         }
     }
 
-    public void Dispose()
+    private async Task ForcarAtualizacao()
     {
-        _timer?.Dispose();
+        if (aAtualizar) return;
+
+        aAtualizar = true;
+        StateHasChanged();
+
+        // Pequena espera para o utilizador ver que o botão reagiu.
+        await Task.WhenAll(CarregarDados(), Task.Delay(400));
+
+        aAtualizar = false;
     }
+
+    public void Dispose() => temporizador?.Dispose();
 }

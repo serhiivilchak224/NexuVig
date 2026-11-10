@@ -1,44 +1,37 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">NexuVig.Dashboard</a>
-    </div>
-</div>
+﻿@inject IJSRuntime JS
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<div class="nv-nav">
+    <a class="nv-marca" href="">
+        <i class="bi bi-radar" aria-hidden="true"></i>
+        <span>NexuVig</span>
+    </a>
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
+    <nav class="nv-links">
+        <NavLink class="nv-link" href="" Match="NavLinkMatch.All">
+            <i class="bi bi-grid-1x2" aria-hidden="true"></i> Painel
+        </NavLink>
     </nav>
-	@inject ServicoIdioma ServicoIdioma
 
-	<div class="px-3 mt-4 mb-3">
-		<button class="btn btn-outline-light btn-sm w-100" @onclick="AlternarIdioma">
-			🌐 @(ServicoIdioma.IdiomaAtual == "PT" ? "Mudar para Inglês" : "Switch to Portuguese")
-		</button>
-	</div>
-
-	@code {
-	private void AlternarIdioma()
-	{
-	ServicoIdioma.MudarIdioma(ServicoIdioma.IdiomaAtual == "PT" ? "EN" : "PT");
-	}
-	}
+    <button class="nv-link nv-tema" @onclick="MudarTema">
+        <i class="bi @(temaEscuro ? "bi-sun" : "bi-moon-stars")" aria-hidden="true"></i>
+        @(temaEscuro ? "Tema claro" : "Tema escuro")
+    </button>
 </div>
 
+@code {
+    private bool temaEscuro = true;
+
+    protected override async Task OnAfterRenderAsync(bool primeiraVez)
+    {
+        if (primeiraVez)
+        {
+            temaEscuro = await JS.InvokeAsync<string>("nexuvigTema.obter") == "dark";
+            StateHasChanged();
+        }
+    }
+
+    private async Task MudarTema()
+    {
+        temaEscuro = await JS.InvokeAsync<string>("nexuvigTema.alternar") == "dark";
+    }
+}
