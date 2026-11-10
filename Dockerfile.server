@@ -1,0 +1,14 @@
+# NexuVig.Server para alojamento online (Render). Contexto de build: raiz do repositório.
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY nex/NexuVig.Agent/NexuVig.Shared/ nex/NexuVig.Agent/NexuVig.Shared/
+COPY nex/NexuVig.Agent/NexuVig.Server/ nex/NexuVig.Agent/NexuVig.Server/
+RUN dotnet publish nex/NexuVig.Agent/NexuVig.Server/NexuVig.Server.csproj -c Release -o /app
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /app .
+# O Render define PORT; o Server ouve nessa porta (ver Program.cs).
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+ENTRYPOINT ["dotnet", "NexuVig.Server.dll"]

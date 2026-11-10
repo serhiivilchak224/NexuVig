@@ -5,52 +5,74 @@ using NexuVig.Shared;
 using NexuVig.Server.Data;
 using NexuVig.Server.Models;
 
+// O ambiente vem de ASPNETCORE_ENVIRONMENT (Development por defeito, para o trabalho local;
+// o Dockerfile define Production). User Secrets só são lidos em Development.
+var ambiente = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? Environments.Development;
+
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args = args,
-    EnvironmentName = Environments.Development
+    EnvironmentName = ambiente
 });
 
-// Endereço(s) onde o Server ouve. Por defeito, só no próprio computador.
-// Para testes com outros computadores (ex.: VM), arrancar com
-// --NexuVig:EnderecosServer="https://localhost:7259;https://192.168.56.1:7259"
+// Endereço(s) onde o Server ouve:
+// - alojamento online (Render): a variável PORT define a porta, ouvindo em HTTP atrás do proxy
+//   (o HTTPS é terminado pela plataforma);
+// - local: https://localhost:7259, ou NexuVig:EnderecosServer
+//   (ex.: --NexuVig:EnderecosServer="https://localhost:7259;https://192.168.56.1:7259").
+var porta = Environment.GetEnvironmentVariable("PORT");
 var enderecos = builder.Configuration["NexuVig:EnderecosServer"];
-builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(enderecos) ? "https://localhost:7259" : enderecos);
-
-builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
-    policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+if (!string.IsNullOrWhiteSpace(porta))
+    builder.WebHost.UseUrls($"http://0.0.0.0:{porta}");
+else
+    builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(enderecos) ? "https://localhost:7259" : enderecos);
 
 var connectionString = builder.Configuration.GetConnectionString("SupabaseConnection");
 builder.Services.AddDbContext<NexuVigContext>(options =>
     options.UseNpgsql(connectionString));
 
 var app = builder.Build();
-app.UseCors();
 
-// Segurança: o envio de medições exige a chave de API (cabeçalho X-Api-Key).
-// A chave vem dos User Secrets / variáveis de ambiente, nunca do código.
+// Segurança (cabeçalho X-Api-Key, chaves vindas de User Secrets / variáveis de ambiente):
+// - POST /api/medicoes (Agent)        -> NexuVig:ChaveApi
+// - GET  /api/medicoes (Dashboard)    -> NexuVig:ChaveDashboard
+// Duas chaves diferentes: a do Agent só serve para enviar, a do Dashboard só para ler.
 var chaveEsperada = builder.Configuration["NexuVig:ChaveApi"];
+var chaveDashboard = builder.Configuration["NexuVig:ChaveDashboard"];
 
 if (string.IsNullOrEmpty(chaveEsperada))
 {
     app.Logger.LogWarning("NexuVig:ChaveApi não está configurada: todos os envios do Agent vão ser rejeitados (401).");
 }
 
+// Só em Development a leitura fica aberta quando a chave do Dashboard não está configurada.
+bool leituraAberta = app.Environment.IsDevelopment() && string.IsNullOrEmpty(chaveDashboard);
+if (string.IsNullOrEmpty(chaveDashboard))
+{
+    app.Logger.LogWarning(leituraAberta
+        ? "NexuVig:ChaveDashboard não está configurada: a leitura de /api/medicoes está aberta (só em Development)."
+        : "NexuVig:ChaveDashboard não está configurada: a leitura de /api/medicoes vai ser rejeitada (401).");
+}
+
+static bool ChaveCorresponde(string? esperada, string recebida)
+{
+    if (string.IsNullOrEmpty(esperada)) return false;
+    byte[] a = Encoding.UTF8.GetBytes(esperada);
+    byte[] b = Encoding.UTF8.GetBytes(recebida);
+    return a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);
+}
+
 app.Use(async (contexto, seguinte) =>
 {
-    bool eEnvio = HttpMethods.IsPost(contexto.Request.Method) &&
-                  contexto.Request.Path.StartsWithSegments("/api/medicoes");
+    bool eMedicoes = contexto.Request.Path.StartsWithSegments("/api/medicoes");
+    bool eEnvio = eMedicoes && HttpMethods.IsPost(contexto.Request.Method);
+    bool eLeitura = eMedicoes && HttpMethods.IsGet(contexto.Request.Method);
 
-    if (eEnvio)
+    if (eEnvio || (eLeitura && !leituraAberta))
     {
         contexto.Request.Headers.TryGetValue("X-Api-Key", out var recebida);
 
-        byte[] esperada = Encoding.UTF8.GetBytes(chaveEsperada ?? "");
-        byte[] enviada = Encoding.UTF8.GetBytes(recebida.ToString());
-
-        bool valida = !string.IsNullOrEmpty(chaveEsperada) &&
-                      esperada.Length == enviada.Length &&
-                      CryptographicOperations.FixedTimeEquals(esperada, enviada);
+        bool valida = ChaveCorresponde(eEnvio ? chaveEsperada : chaveDashboard, recebida.ToString());
 
         if (!valida)
         {

@@ -16,6 +16,12 @@
         <i class="bi @(temaEscuro ? "bi-sun" : "bi-moon-stars")" aria-hidden="true"></i>
         @(temaEscuro ? "Tema claro" : "Tema escuro")
     </button>
+
+    <form method="post" action="/sair" style="display:contents">
+        <button type="submit" class="nv-link nv-tema">
+            <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sair
+        </button>
+    </form>
 </div>
 
 @code {
