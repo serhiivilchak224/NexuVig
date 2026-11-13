@@ -11,6 +11,9 @@ if errorlevel 1 exit /b 1
 set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
 if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
 if not exist "%ISCC%" set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 7\ISCC.exe"
+if not exist "%ISCC%" set "ISCC=%ProgramFiles(x86)%\Inno Setup 7\ISCC.exe"
+if not exist "%ISCC%" set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 7\ISCC.exe"
 if not exist "%ISCC%" goto semInno
 
 echo [2/2] A criar o instalador...
@@ -22,5 +25,5 @@ echo Instalador criado em installer\output\NexuVig-Agent-Setup.exe
 exit /b 0
 
 :semInno
-echo Inno Setup 6 nao encontrado. Instala-o em https://jrsoftware.org/isdl.php e volta a executar.
+echo Inno Setup 6 ou 7 nao encontrado. Instala-o em https://jrsoftware.org/isdl.php e volta a executar.
 exit /b 1
