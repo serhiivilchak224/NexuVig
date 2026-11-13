@@ -11,11 +11,11 @@ Objetivo: o Server e o Dashboard ficam sempre online, para o Agent do PC da esco
 
 ## 1. Gerar as chaves
 
-Em PowerShell (uma de cada vez; guardar num sítio seguro, por exemplo um gestor de palavras-passe):
+Em PowerShell (funciona no Windows PowerShell 5.1 e no PowerShell 7; uma de cada vez; guardar num sítio seguro, por exemplo um gestor de palavras-passe):
 
 ```powershell
 $b = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($b)
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
 [Convert]::ToBase64String($b)
 ```
 
