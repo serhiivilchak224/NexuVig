@@ -72,6 +72,60 @@
     </div>
 </div>
 
+@if (pendentes.Count > 0)
+{
+    <div class="nv-cartao" style="margin-bottom: 1.25rem;">
+        <div class="nv-cartao-cabecalho">
+            <span><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Por aprovar</span>
+            <span class="nv-subtitulo" style="margin: 0; font-weight: 400;">@pendentes.Count à espera · os dados só contam depois de aprovares</span>
+        </div>
+
+        <div class="nv-tabela-scroll">
+            <table class="nv-tabela">
+                <thead>
+                    <tr>
+                        <th>Equipamento</th>
+                        <th>Sistema</th>
+                        <th>Último contacto</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var pc in pendentes.OrderBy(e => e.Nome))
+                    {
+                        var ip = Monitorizacao.IpPrincipal(pc);
+
+                        <tr>
+                            <td>
+                                <span class="nv-nome">@pc.Nome</span>
+                                <div class="nv-detalhe">@(ip ?? "sem IP") · @pc.AgentId</div>
+                            </td>
+                            <td>
+                                <div>@(string.IsNullOrWhiteSpace(pc.SistemaOperativo) ? "—" : pc.SistemaOperativo)</div>
+                                <div class="nv-detalhe">@pc.Processador</div>
+                            </td>
+                            <td>@Monitorizacao.TempoDesde(pc.DataHora)</td>
+                            <td style="white-space: nowrap; text-align: right;">
+                                <button class="nv-botao" disabled="@aGerir" @onclick="() => Aprovar(pc)">
+                                    <i class="bi bi-check-lg" aria-hidden="true"></i> Aprovar
+                                </button>
+                                <button class="nv-botao" disabled="@aGerir" @onclick="() => Rejeitar(pc)">
+                                    <i class="bi bi-x-lg" aria-hidden="true"></i> Rejeitar
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (erroGestao is not null)
+        {
+            <div class="nv-detalhe" style="padding: .75rem 1.25rem; color: var(--nv-perigo);">@erroGestao</div>
+        }
+    </div>
+}
+
 <div class="nv-cartao">
     <div class="nv-cartao-cabecalho">
         <span>Equipamentos</span>
@@ -149,7 +203,11 @@
 @code {
     private const int SegundosEntreAtualizacoes = 5;
 
+    // Aprovados: contam para o painel. Pendentes: registaram-se sozinhos e esperam aprovação.
     private List<DadosEquipamento> equipamentos = new();
+    private List<DadosEquipamento> pendentes = new();
+    private bool aGerir;
+    private string? erroGestao;
     private bool? servidorOnline;
     private DateTimeOffset? ultimaAtualizacao;
     private bool aAtualizar;
@@ -178,7 +236,9 @@
         try
         {
             var resposta = await Http.GetFromJsonAsync<List<DadosEquipamento>>("/api/medicoes");
-            equipamentos = resposta ?? new();
+            var todos = resposta ?? new();
+            equipamentos = todos.Where(e => e.Aprovado).ToList();
+            pendentes = todos.Where(e => !e.Aprovado).ToList();
             servidorOnline = true;
             ultimaAtualizacao = DateTimeOffset.UtcNow;
         }
@@ -201,6 +261,35 @@
         await Task.WhenAll(CarregarDados(), Task.Delay(400));
 
         aAtualizar = false;
+    }
+
+    private Task Aprovar(DadosEquipamento pc) =>
+        Gerir(() => Http.PostAsync($"/api/computadores/{pc.AgentId}/aprovar", null));
+
+    private Task Rejeitar(DadosEquipamento pc) =>
+        Gerir(() => Http.DeleteAsync($"/api/computadores/{pc.AgentId}"));
+
+    private async Task Gerir(Func<Task<HttpResponseMessage>> pedido)
+    {
+        if (aGerir) return;
+
+        aGerir = true;
+        erroGestao = null;
+
+        try
+        {
+            using var resposta = await pedido();
+            if (!resposta.IsSuccessStatusCode)
+                erroGestao = $"O Server recusou o pedido (HTTP {(int)resposta.StatusCode}).";
+        }
+        catch (Exception erro)
+        {
+            erroGestao = "Não foi possível contactar o Server.";
+            Console.WriteLine($"Erro na gestão de computadores: {erro.Message}");
+        }
+
+        await CarregarDados();
+        aGerir = false;
     }
 
     public void Dispose() => temporizador?.Dispose();

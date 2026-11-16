@@ -64,7 +64,7 @@ Abrir `https://nexuvig-dashboard.onrender.com`: deve aparecer o ecrã de entrada
 Instalar o Agent no PC da escola com o endereço e a chave do Agent (o certificado do Render é verdadeiro, não é preciso `servidor.cer`):
 
 ```
-NexuVig-Agent-Setup.exe /VERYSILENT /SERVER=https://nexuvig-server.onrender.com /CHAVE=<ChaveApi>
+NexuVig-Setup.exe /VERYSILENT /SERVER=https://nexuvig-server.onrender.com /CHAVE=<ChaveApi>
 ```
 
 ou pelo assistente, indicando os mesmos valores. Em computadores já instalados, reinstalar com o novo endereço e chave.

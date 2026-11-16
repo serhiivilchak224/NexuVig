@@ -35,6 +35,9 @@ namespace NexuVig.Server.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("Aprovado")
+                        .HasColumnType("boolean");
+
                     b.PrimitiveCollection<List<string>>("EnderecosIPv4")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -49,6 +52,9 @@ namespace NexuVig.Server.Migrations
 
                     b.Property<string>("SistemaOperativo")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TokenHash")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("UltimaComunicacao")

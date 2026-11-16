@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NexuVig – Descarregar</title>
+<meta name="description" content="NexuVig: monitorização de computadores. Descarrega o programa para Windows.">
+<style>
+  :root { --fundo: #0f172a; --cartao: #1e293b; --texto: #e2e8f0; --suave: #94a3b8; --acento: #3b82f6; --linha: #334155; }
+  @media (prefers-color-scheme: light) {
+    :root { --fundo: #f8fafc; --cartao: #ffffff; --texto: #0f172a; --suave: #475569; --acento: #2563eb; --linha: #e2e8f0; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--fundo); color: var(--texto); line-height: 1.55; }
+  main { max-width: 860px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font-size: 2.4rem; margin: 0 0 .25rem; letter-spacing: -.02em; }
+  h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
+  p { margin: 0 0 .75rem; }
+  .lema { color: var(--suave); font-size: 1.1rem; margin-bottom: 1.75rem; }
+  .botao { display: inline-block; background: var(--acento); color: #fff; text-decoration: none; font-weight: 600; padding: .9rem 1.6rem; border-radius: 10px; font-size: 1.05rem; }
+  .botao:hover { filter: brightness(1.1); }
+  .nota { color: var(--suave); font-size: .9rem; margin-top: .6rem; }
+  .grelha { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 2.25rem; }
+  .cartao { background: var(--cartao); border: 1px solid var(--linha); border-radius: 12px; padding: 1.25rem; }
+  ol, ul { margin: 0; padding-left: 1.2rem; }
+  li { margin-bottom: .4rem; }
+  code { background: var(--linha); padding: .1rem .35rem; border-radius: 5px; font-size: .9em; }
+  footer { margin-top: 2.5rem; color: var(--suave); font-size: .9rem; }
+  a { color: var(--acento); }
+</style>
+</head>
+<body>
+<main>
+  <h1>NexuVig</h1>
+  <p class="lema">Monitorização de computadores: CPU, memória, disco e estado da ligação, num só painel.</p>
+
+  <a class="botao" href="https://github.com/serhiivilchak224/NexuVig/releases/latest/download/NexuVig-Setup.exe">Descarregar para Windows</a>
+  <p class="nota">Windows 10 ou 11 (64 bits) · gratuito · <a href="https://github.com/serhiivilchak224/NexuVig/releases">todas as versões</a></p>
+
+  <div class="grelha">
+    <section class="cartao">
+      <h2>O que faz</h2>
+      <ul>
+        <li>Mostra-te os dados do teu computador: processador, memória, disco, rede e tempo ligado.</li>
+        <li>Envia esses dados, a cada 30 segundos, para o painel do administrador.</li>
+        <li>Arranca sozinho com o Windows, como serviço.</li>
+      </ul>
+    </section>
+
+    <section class="cartao">
+      <h2>Como instalar</h2>
+      <ol>
+        <li>Descarrega e abre o <code>NexuVig-Setup.exe</code>.</li>
+        <li>Se o Windows mostrar "O Windows protegeu o seu PC", escolhe <strong>Mais informações</strong> e depois <strong>Executar mesmo assim</strong>.</li>
+        <li>Segue o assistente sem alterar nada (precisa de permissões de administrador).</li>
+        <li>Abre o NexuVig no menu Iniciar.</li>
+      </ol>
+    </section>
+
+    <section class="cartao">
+      <h2>Aprovação</h2>
+      <p>Depois de instalado, o computador regista-se sozinho e fica <strong>à espera de aprovação</strong>. Só passa a contar no painel quando o administrador o aceitar.</p>
+      <p>Enquanto esperas, o programa já mostra os dados do teu computador.</p>
+    </section>
+
+    <section class="cartao">
+      <h2>Que dados são enviados</h2>
+      <p>Nome do computador, sistema operativo, processador, endereços IP, utilização de CPU e memória, espaço em disco e tempo ligado.</p>
+      <p>Não são enviados ficheiros, programas abertos nem histórico de navegação.</p>
+    </section>
+  </div>
+
+  <footer>
+    <p>O aviso do Windows aparece porque o instalador não tem assinatura digital paga. O código é público: <a href="https://github.com/serhiivilchak224/NexuVig">github.com/serhiivilchak224/NexuVig</a>.</p>
+    <p>Para desinstalar: Definições &gt; Aplicações &gt; NexuVig.</p>
+    <p>Projeto de Prova de Aptidão Profissional (PAP) de Serhii Vilchak · ETPR · 2026/2027</p>
+  </footer>
+</main>
+</body>
+</html>

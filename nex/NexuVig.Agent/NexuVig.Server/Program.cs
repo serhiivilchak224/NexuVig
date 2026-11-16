@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -33,16 +34,18 @@ builder.Services.AddDbContext<NexuVigContext>(options =>
 
 var app = builder.Build();
 
-// Segurança (cabeçalho X-Api-Key, chaves vindas de User Secrets / variáveis de ambiente):
-// - POST /api/medicoes (Agent)        -> NexuVig:ChaveApi
-// - GET  /api/medicoes (Dashboard)    -> NexuVig:ChaveDashboard
-// Duas chaves diferentes: a do Agent só serve para enviar, a do Dashboard só para ler.
+// Segurança (chaves vindas de User Secrets / variáveis de ambiente):
+// - POST /api/registo                 -> aberto, mas limitado; o computador fica "por aprovar"
+// - POST /api/medicoes (Agent)        -> X-Agent-Token (token do próprio computador)
+//                                        ou X-Api-Key = NexuVig:ChaveApi (chave partilhada)
+// - GET  /api/medicoes (Dashboard)    -> X-Api-Key = NexuVig:ChaveDashboard
+// - /api/computadores/... (gestão)    -> X-Api-Key = NexuVig:ChaveDashboard
 var chaveEsperada = builder.Configuration["NexuVig:ChaveApi"];
 var chaveDashboard = builder.Configuration["NexuVig:ChaveDashboard"];
 
 if (string.IsNullOrEmpty(chaveEsperada))
 {
-    app.Logger.LogWarning("NexuVig:ChaveApi não está configurada: todos os envios do Agent vão ser rejeitados (401).");
+    app.Logger.LogInformation("NexuVig:ChaveApi não está configurada: só são aceites Agents registados (token próprio).");
 }
 
 // Só em Development a leitura fica aberta quando a chave do Dashboard não está configurada.
@@ -62,13 +65,21 @@ static bool ChaveCorresponde(string? esperada, string recebida)
     return a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);
 }
 
+// O Server nunca guarda o token: guarda o hash e compara hashes.
+static string HashToken(string token) =>
+    Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
 app.Use(async (contexto, seguinte) =>
 {
     bool eMedicoes = contexto.Request.Path.StartsWithSegments("/api/medicoes");
     bool eEnvio = eMedicoes && HttpMethods.IsPost(contexto.Request.Method);
     bool eLeitura = eMedicoes && HttpMethods.IsGet(contexto.Request.Method);
+    bool eGestao = contexto.Request.Path.StartsWithSegments("/api/computadores");
 
-    if (eEnvio || (eLeitura && !leituraAberta))
+    // Com X-Agent-Token, o token é validado no próprio pedido (precisa do AgentId do corpo).
+    bool comToken = eEnvio && contexto.Request.Headers.ContainsKey("X-Agent-Token");
+
+    if ((eEnvio && !comToken) || ((eLeitura || eGestao) && !leituraAberta))
     {
         contexto.Request.Headers.TryGetValue("X-Api-Key", out var recebida);
 
@@ -107,6 +118,7 @@ app.MapGet("/api/medicoes", async (NexuVigContext db) =>
             Processador = c.Processador,
             EnderecosIPv4 = c.EnderecosIPv4,
             UnidadeDisco = c.UnidadeDisco,
+            Aprovado = c.Aprovado,
             DataHora = new DateTimeOffset(c.UltimaComunicacao, TimeSpan.Zero),
             UtilizacaoCPU = ultima?.UtilizacaoCPU ?? 0,
             UtilizacaoRAM = ultima?.UtilizacaoRAM ?? 0,
@@ -121,7 +133,85 @@ app.MapGet("/api/medicoes", async (NexuVigContext db) =>
     return Results.Ok(resultado);
 });
 
-app.MapPost("/api/medicoes", async (DadosEquipamento dados, NexuVigContext db) =>
+// Registo automático: o Agent instalado sem chave pede um token próprio.
+// O computador fica "por aprovar" até o administrador o aceitar no Dashboard.
+const int MaximoRegistosPorHora = 5;     // por endereço IP
+const int MaximoPendentes = 50;          // no total, à espera de aprovação
+var registos = new ConcurrentDictionary<string, (int Total, DateTime Inicio)>();
+
+app.MapPost("/api/registo", async (PedidoRegisto pedido, HttpContext contexto, NexuVigContext db) =>
+{
+    if (!Guid.TryParse(pedido.AgentId, out var id) || id == Guid.Empty ||
+        string.IsNullOrWhiteSpace(pedido.Nome) || pedido.Nome.Length > 100)
+    {
+        return Results.BadRequest(new { mensagem = "Pedido de registo inválido." });
+    }
+
+    string ip = contexto.Connection.RemoteIpAddress?.ToString() ?? "desconhecido";
+    var agora = DateTime.UtcNow;
+    var contagem = registos.AddOrUpdate(ip,
+        _ => (1, agora),
+        (_, atual) => agora - atual.Inicio > TimeSpan.FromHours(1) ? (1, agora) : (atual.Total + 1, atual.Inicio));
+
+    if (contagem.Total > MaximoRegistosPorHora)
+        return Results.Json(new { mensagem = "Demasiados registos a partir deste endereço. Tenta mais tarde." },
+            statusCode: StatusCodes.Status429TooManyRequests);
+
+    var computador = await db.Computadores.FirstOrDefaultAsync(c => c.AgentId == pedido.AgentId);
+
+    // Um computador que já tem token não pode ser registado outra vez (impede roubar a identidade).
+    if (computador?.TokenHash is not null)
+        return Results.Conflict(new { mensagem = "Este computador já está registado. Para o registar de novo, o administrador tem de o remover no painel." });
+
+    if (computador is null)
+    {
+        if (await db.Computadores.CountAsync(c => !c.Aprovado) >= MaximoPendentes)
+            return Results.Json(new { mensagem = "Há demasiados computadores à espera de aprovação." },
+                statusCode: StatusCodes.Status429TooManyRequests);
+
+        computador = new Computador
+        {
+            AgentId = pedido.AgentId,
+            Nome = pedido.Nome.Trim(),
+            Aprovado = false,
+            UltimaComunicacao = agora
+        };
+        db.Computadores.Add(computador);
+    }
+
+    string token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    computador.TokenHash = HashToken(token);
+    await db.SaveChangesAsync();
+
+    app.Logger.LogInformation("Novo registo: {Nome} ({AgentId}), aprovado: {Aprovado}",
+        computador.Nome, computador.AgentId, computador.Aprovado);
+
+    return Results.Ok(new RespostaRegisto { Token = token, Aprovado = computador.Aprovado });
+});
+
+// Gestão (Dashboard): aprovar ou remover um computador.
+app.MapPost("/api/computadores/{agentId}/aprovar", async (string agentId, NexuVigContext db) =>
+{
+    var computador = await db.Computadores.FirstOrDefaultAsync(c => c.AgentId == agentId);
+    if (computador is null) return Results.NotFound(new { mensagem = "Computador não encontrado." });
+
+    computador.Aprovado = true;
+    await db.SaveChangesAsync();
+    return Results.Ok(new { mensagem = "Computador aprovado." });
+});
+
+app.MapDelete("/api/computadores/{agentId}", async (string agentId, NexuVigContext db) =>
+{
+    var computador = await db.Computadores.FirstOrDefaultAsync(c => c.AgentId == agentId);
+    if (computador is null) return Results.NotFound(new { mensagem = "Computador não encontrado." });
+
+    // As medições são apagadas em cascata.
+    db.Computadores.Remove(computador);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { mensagem = "Computador removido." });
+});
+
+app.MapPost("/api/medicoes", async (DadosEquipamento dados, HttpContext contexto, NexuVigContext db) =>
 {
     var erros = new List<string>();
     if (!Guid.TryParse(dados.AgentId, out var id) || id == Guid.Empty) erros.Add("AgentId inválido.");
@@ -132,14 +222,26 @@ app.MapPost("/api/medicoes", async (DadosEquipamento dados, NexuVigContext db) =
 
     var computador = await db.Computadores.FirstOrDefaultAsync(c => c.AgentId == dados.AgentId);
 
-    if (computador == null)
+    if (contexto.Request.Headers.TryGetValue("X-Agent-Token", out var tokenRecebido))
     {
+        // Agent registado: o token tem de ser o deste computador.
+        if (computador?.TokenHash is null ||
+            !ChaveCorresponde(computador.TokenHash, HashToken(tokenRecebido.ToString())))
+        {
+            return Results.Json(new { mensagem = "Token inválido." },
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+    }
+    else if (computador == null)
+    {
+        // Chave partilhada (já validada): instalado pelo administrador, fica logo aprovado.
         computador = new Computador
         {
             AgentId = dados.AgentId,
             Nome = dados.Nome,
             SistemaOperativo = dados.SistemaOperativo,
-            Processador = dados.Processador
+            Processador = dados.Processador,
+            Aprovado = true
         };
         db.Computadores.Add(computador);
     }
@@ -154,6 +256,17 @@ app.MapPost("/api/medicoes", async (DadosEquipamento dados, NexuVigContext db) =
     // Hora do Server (e não a do Agent): o estado online/offline não pode depender
     // do relógio de cada computador, que pode estar atrasado ou adiantado.
     computador.UltimaComunicacao = DateTime.UtcNow;
+
+    // Por aprovar: fica só a identificação do computador; as medições ainda não são guardadas.
+    if (!computador.Aprovado)
+    {
+        await db.SaveChangesAsync();
+        return Results.Accepted(value: new RespostaMedicao
+        {
+            Estado = "pendente",
+            Mensagem = "Computador à espera de aprovação do administrador."
+        });
+    }
 
     var novaMedicao = new Medicao
     {
@@ -171,7 +284,7 @@ app.MapPost("/api/medicoes", async (DadosEquipamento dados, NexuVigContext db) =
     db.Medicoes.Add(novaMedicao);
     await db.SaveChangesAsync();
 
-    return Results.Ok(new { mensagem = "Medição guardada com sucesso." });
+    return Results.Ok(new RespostaMedicao { Estado = "aprovado", Mensagem = "Medição guardada com sucesso." });
 });
 
 app.Run();

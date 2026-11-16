@@ -11,6 +11,7 @@ O NexuVig recolhe informação dos computadores (CPU, RAM, disco, estado da comu
 |---|---|
 | NexuVig.Agent | Worker Service que corre em cada computador e envia medições a cada 30 segundos |
 | NexuVig.Server | API (ASP.NET Core) que valida as medições e as guarda no Supabase (PostgreSQL) |
+| NexuVig.App | Programa com janela (WinForms) onde o utilizador vê os dados do seu computador e o estado da ligação |
 | NexuVig.Shared | Modelos partilhados entre o Agent e o Server |
 | NexuVig.Dashboard | Painel web em Blazor, com tema claro/escuro, alertas e página de detalhes |
 
@@ -27,7 +28,9 @@ C# (.NET 10), ASP.NET Core, Blazor, Entity Framework Core, PostgreSQL (Supabase)
 - [x] Segurança da API (API Key)
 - [x] Login de administrador no Dashboard (perfis de utilizador por fazer)
 - [ ] Registo de avarias e intervenções
-- [ ] Instalador do Agent
+- [x] Instalador (Setup.exe) com o Agent e o programa NexuVig
+- [x] Registo automático dos computadores, com aprovação do administrador
+- [x] Página de descarga e instalador criado automaticamente (GitHub Actions)
 
 ## Como executar
 
@@ -44,13 +47,28 @@ C# (.NET 10), ASP.NET Core, Blazor, Entity Framework Core, PostgreSQL (Supabase)
 4. Os registos do serviço ficam no Visualizador de Eventos (Registos do Windows > Aplicação, origem "NexuVig Agent").
 5. O serviço corre como LocalSystem, que só aceita o HTTPS do Server se o certificado for de confiança para o computador (Cert:\LocalMachine\Root). Com o Server online usa-se um certificado verdadeiro.
 
-### Instalador do Agent (Setup.exe)
+### Registo automático e aprovação
 
-Instala o Agent como uma aplicação normal do Windows: copia os ficheiros para `C:\Program Files\NexuVig\Agent`, regista o Serviço do Windows `NexuVig Agent`, guarda o endereço do Server e a chave de API no próprio serviço e arranca-o. Aparece em "Aplicações instaladas" e desinstala-se por aí (o serviço é parado e removido).
+Quem instala o NexuVig a partir da página de descarga não precisa de chave:
 
-1. No PC de desenvolvimento: instalar o [Inno Setup 6](https://jrsoftware.org/isdl.php) e executar `installer\criar-instalador.cmd`. Cria `installer\output\NexuVig-Agent-Setup.exe`.
-2. No computador a monitorizar (precisa de direitos de administrador): executar o `Setup.exe`, indicar o endereço do Server (HTTPS) e a chave de API.
-3. Instalação silenciosa (a chave fica no histórico da linha de comandos; em computadores partilhados, preferir o assistente): `NexuVig-Agent-Setup.exe /VERYSILENT /SERVER=https://servidor:7259 /CHAVE=<chave>`.
+1. O Agent pede um registo ao Server (`POST /api/registo`) e recebe um **token próprio**, guardado em `C:\ProgramData\NexuVig\seguro` (pasta que só o sistema e os administradores leem). O Server guarda apenas o hash (SHA-256) do token.
+2. O computador aparece no Dashboard em **Por aprovar**. Enquanto não for aprovado, o Server não guarda as suas medições (responde 202).
+3. O administrador **aprova** ou **rejeita** com um clique. Depois de aprovado, as medições passam a contar.
+
+Proteções: limite de 5 registos por hora por endereço IP, máximo de 50 computadores por aprovar, e um computador que já tem token não pode ser registado outra vez (o administrador tem de o remover primeiro). A chave partilhada (`NexuVig:ChaveApi`) continua a funcionar para instalações feitas pelo administrador, que ficam logo aprovadas.
+
+### Página de descarga e instalador automático
+
+- `site/index.html` é a página de descarga (site estático no Render, definido no `render.yaml`).
+- `.github/workflows/compilar.yml` compila a solução em cada envio para o GitHub e cria o `NexuVig-Setup.exe`. Nas branches `master` e `alojamento-online` publica-o em Releases; o botão da página aponta sempre para a versão mais recente.
+
+### Instalador (Setup.exe)
+
+Instala o NexuVig como uma aplicação normal do Windows: copia o Agent e o programa NexuVig para `C:\Program Files\NexuVig\Agent`, regista o Serviço do Windows `NexuVig Agent`, guarda o endereço do Server (e a chave de API, se for indicada) no próprio serviço e arranca-o. Aparece em "Aplicações instaladas" e desinstala-se por aí (o serviço é parado e removido).
+
+1. No PC de desenvolvimento: instalar o [Inno Setup 6](https://jrsoftware.org/isdl.php) e executar `installer\criar-instalador.cmd`. Cria `installer\output\NexuVig-Setup.exe`.
+2. No computador a monitorizar (precisa de direitos de administrador): executar o `Setup.exe`, o endereço do Server já vem preenchido e a chave de API é opcional (sem chave, o computador fica por aprovar).
+3. Instalação silenciosa (a chave fica no histórico da linha de comandos; em computadores partilhados, preferir o assistente): `NexuVig-Setup.exe /VERYSILENT /SERVER=https://servidor:7259 /CHAVE=<chave>`.
 4. Se o Server usar um certificado autoassinado, copiar o `.cer` para `installer\servidor.cer` antes de criar o instalador; é instalado como de confiança no computador. Com um certificado verdadeiro não é preciso.
 5. O computador tem de conseguir chegar ao endereço do Server. O Server a correr noutro computador (ou em `localhost` de outro PC) não é acessível sem rede ou alojamento online.
 6. Verificar que utilizadores normais não leem a chave: `(Get-Acl 'HKLM:\SYSTEM\CurrentControlSet\Services\NexuVig Agent').Access | Format-Table IdentityReference, RegistryRights`.

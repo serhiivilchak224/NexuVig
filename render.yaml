@@ -34,3 +34,10 @@ services:
         sync: false
       - key: NexuVig__Admin__Password
         sync: false
+
+  # Página de descarga (site estático: gratuito e não adormece).
+  - type: web
+    name: nexuvig-site
+    runtime: static
+    buildCommand: echo "site estatico"
+    staticPublishPath: ./site
