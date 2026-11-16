@@ -108,7 +108,7 @@ begin
   PaginaServidor := CreateInputQueryPage(wpSelectDir,
     'Ligação ao Server',
     'Onde está o Server do NexuVig?',
-    'Podes continuar sem alterar nada: o computador regista-se sozinho e fica à espera de aprovação do administrador. A chave de API é só para instalações feitas pelo administrador.');
+    'Podes continuar sem alterar nada. A chave é só para o administrador.');
   PaginaServidor.Add('Endereço do Server:', False);
   PaginaServidor.Add('Chave de API (opcional):', True);
 

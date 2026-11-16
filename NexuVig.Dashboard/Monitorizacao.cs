@@ -15,6 +15,10 @@ public static class Monitorizacao
     public static bool EstaOnline(DadosEquipamento pc) =>
         (DateTimeOffset.UtcNow - pc.DataHora).TotalSeconds < SegundosSemComunicacao;
 
+    // Um computador acabado de aprovar ainda não tem medições guardadas (vem tudo a zero).
+    public static bool SemMedicoes(DadosEquipamento pc) =>
+        pc.MemoriaTotalGiB <= 0 && pc.DiscoTotalGiB <= 0;
+
     public static double PercentagemDiscoLivre(DadosEquipamento pc) =>
         pc.DiscoTotalGiB > 0 ? pc.DiscoLivreGiB / pc.DiscoTotalGiB * 100 : 100;
 

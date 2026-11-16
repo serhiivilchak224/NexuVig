@@ -177,15 +177,23 @@
                             <td>
                                 <span class="nv-pilula @(online ? "nv-ok" : "nv-perigo")">@(online ? "Online" : "Offline")</span>
                             </td>
-                            <td>
-                                <BarraUso Percentagem="pc.UtilizacaoCPU" />
-                            </td>
-                            <td>
-                                <BarraUso Percentagem="pc.UtilizacaoRAM" />
-                            </td>
-                            <td>
-                                <BarraUso Percentagem="100 - discoLivre" Texto="@($"{discoLivre:F1}%")" />
-                            </td>
+                            @if (Monitorizacao.SemMedicoes(pc))
+                            {
+                                @* Acabado de aprovar: ainda não chegou nenhuma medição. *@
+                                <td colspan="3"><span class="nv-detalhe">À espera da primeira medição...</span></td>
+                            }
+                            else
+                            {
+                                <td>
+                                    <BarraUso Percentagem="pc.UtilizacaoCPU" />
+                                </td>
+                                <td>
+                                    <BarraUso Percentagem="pc.UtilizacaoRAM" />
+                                </td>
+                                <td>
+                                    <BarraUso Percentagem="100 - discoLivre" Texto="@($"{discoLivre:F1}%")" />
+                                </td>
+                            }
                             <td>
                                 @if (Monitorizacao.CpuAlta(pc)) { <span class="nv-etiqueta nv-perigo">CPU alta</span> }
                                 @if (Monitorizacao.RamAlta(pc)) { <span class="nv-etiqueta nv-perigo">RAM alta</span> }

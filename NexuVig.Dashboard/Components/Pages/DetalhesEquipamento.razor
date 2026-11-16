@@ -1,5 +1,6 @@
 @page "/equipamento/{AgentId}"
 @inject HttpClient Http
+@inject NavigationManager Navegacao
 @using NexuVig.Shared
 @implements IDisposable
 
@@ -42,8 +43,34 @@ else
                 <span class="nv-pilula nv-perigo">Servidor offline</span>
             }
             <span class="nv-pilula @(online ? "nv-ok" : "nv-perigo")">@(online ? "Online" : "Sem comunicação")</span>
+
+            @if (!aConfirmarRemocao)
+            {
+                <button class="nv-botao" @onclick="() => aConfirmarRemocao = true">
+                    <i class="bi bi-trash" aria-hidden="true"></i> Remover
+                </button>
+            }
+            else
+            {
+                <button class="nv-botao" style="color: var(--nv-perigo);" disabled="@aRemover" @onclick="Remover">
+                    <i class="bi bi-trash" aria-hidden="true"></i> @(aRemover ? "A remover..." : "Confirmar remoção")
+                </button>
+                <button class="nv-botao" disabled="@aRemover" @onclick="() => aConfirmarRemocao = false">Cancelar</button>
+            }
         </div>
     </div>
+
+    @if (aConfirmarRemocao)
+    {
+        <div class="nv-alerta nv-perigo">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+            <span>
+                Remover apaga este equipamento e todas as suas medições. Desinstala primeiro o NexuVig nesse computador;
+                se continuar instalado, volta a registar-se e aparece em "Por aprovar".
+                @if (erroRemocao is not null) { <strong> @erroRemocao</strong> }
+            </span>
+        </div>
+    }
 
     @if (Monitorizacao.TemAlerta(pc))
     {
@@ -137,6 +164,39 @@ else
             servidorOnline = false;
             Console.WriteLine($"Erro ao contactar o Server: {erro.Message}");
         }
+    }
+
+    private bool aConfirmarRemocao;
+    private bool aRemover;
+    private string? erroRemocao;
+
+    private async Task Remover()
+    {
+        if (aRemover) return;
+
+        aRemover = true;
+        erroRemocao = null;
+
+        try
+        {
+            using var resposta = await Http.DeleteAsync($"/api/computadores/{AgentId}");
+
+            if (resposta.IsSuccessStatusCode)
+            {
+                temporizador?.Dispose();
+                Navegacao.NavigateTo("/");
+                return;
+            }
+
+            erroRemocao = $"O Server recusou o pedido (HTTP {(int)resposta.StatusCode}).";
+        }
+        catch (Exception erro)
+        {
+            erroRemocao = "Não foi possível contactar o Server.";
+            Console.WriteLine($"Erro ao remover o equipamento: {erro.Message}");
+        }
+
+        aRemover = false;
     }
 
     public void Dispose() => temporizador?.Dispose();
