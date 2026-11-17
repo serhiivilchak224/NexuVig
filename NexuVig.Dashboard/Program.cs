@@ -198,7 +198,7 @@ app.MapPost("/entrar", async (HttpContext contexto, HttpClient servidor) =>
                       CryptographicOperations.FixedTimeEquals(Hash(password), Hash(passwordAdmin));
 
     UtilizadorInfo? conta = utilizadorOk && passwordOk
-        ? new UtilizadorInfo { Utilizador = nomeAdmin!, Nome = "Conta de recuperação", Perfil = Perfis.Administrador }
+        ? new UtilizadorInfo { Utilizador = nomeAdmin!, Nome = nomeAdmin!, Perfil = Perfis.Administrador }
         : null;
 
     // 2) Contas guardadas no Server.
