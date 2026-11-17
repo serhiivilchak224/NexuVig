@@ -431,3 +431,8 @@ h1:focus {
     gap: 1rem;
     flex-wrap: wrap;
 }
+
+/* Palavra-passe escondida sem type="password" (o browser não oferece guardá-la) */
+.nv-oculto {
+    -webkit-text-security: disc;
+}

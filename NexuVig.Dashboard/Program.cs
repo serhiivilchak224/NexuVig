@@ -159,11 +159,11 @@ static string PaginaEntrar(string? erro)
 </style>
 </head>
 <body>
-<form method="post" action="/entrar">
+<form method="post" action="/entrar" autocomplete="off">
   <h1>NexuVig</h1>
   {{aviso}}
-  <label>Utilizador <input name="utilizador" autocomplete="username" required autofocus /></label>
-  <label>Palavra-passe <input name="password" type="password" autocomplete="current-password" required /></label>
+  <label>Utilizador <input name="utilizador" autocomplete="off" required autofocus /></label>
+  <label>Palavra-passe <input name="password" type="password" autocomplete="off" required /></label>
   <button type="submit">Entrar</button>
 </form>
 </body>
@@ -198,7 +198,7 @@ app.MapPost("/entrar", async (HttpContext contexto, HttpClient servidor) =>
                       CryptographicOperations.FixedTimeEquals(Hash(password), Hash(passwordAdmin));
 
     UtilizadorInfo? conta = utilizadorOk && passwordOk
-        ? new UtilizadorInfo { Utilizador = nomeAdmin!, Nome = "Administrador", Perfil = Perfis.Administrador }
+        ? new UtilizadorInfo { Utilizador = nomeAdmin!, Nome = "Conta de recuperação", Perfil = Perfis.Administrador }
         : null;
 
     // 2) Contas guardadas no Server.
