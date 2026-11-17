@@ -228,7 +228,7 @@ static UtilizadorInfo ParaInfo(Utilizador u) => new()
 
 app.MapPost("/api/autenticacao", async (PedidoAutenticacao pedido, NexuVigContext db) =>
 {
-    string nome = (pedido.Utilizador ?? "").Trim().ToLowerInvariant();
+    string nome = NomesUtilizador.Normalizar(pedido.Utilizador);
     var conta = await db.Utilizadores.FirstOrDefaultAsync(u => u.NomeUtilizador == nome);
 
     // Verifica sempre um hash (mesmo sem conta), para o tempo de resposta ser igual.
@@ -245,11 +245,11 @@ app.MapGet("/api/utilizadores", async (NexuVigContext db) =>
 
 app.MapPost("/api/utilizadores", async (NovoUtilizador novo, NexuVigContext db) =>
 {
-    string nome = (novo.Utilizador ?? "").Trim().ToLowerInvariant();
+    string nome = NomesUtilizador.Normalizar(novo.Utilizador);
     var erros = new List<string>();
 
     if (!System.Text.RegularExpressions.Regex.IsMatch(nome, "^[a-z0-9._-]{3,30}$"))
-        erros.Add("O utilizador tem de ter 3 a 30 caracteres: letras sem acentos, números, ponto, hífen ou _.");
+        erros.Add("O utilizador tem de ter entre 3 e 30 letras ou números.");
     if (string.IsNullOrWhiteSpace(novo.Nome) || novo.Nome.Length > 100)
         erros.Add("O nome é obrigatório (máximo 100 caracteres).");
     if ((novo.Password ?? "").Length < 10)
@@ -259,7 +259,8 @@ app.MapPost("/api/utilizadores", async (NovoUtilizador novo, NexuVigContext db) 
     if (!Perfis.Valido(novo.Perfil))
         erros.Add("Perfil inválido.");
 
-    if (erros.Count > 0) return Results.BadRequest(new { mensagem = string.Join(" ", erros), erros });
+    // Mostra um problema de cada vez (mais fácil de corrigir).
+    if (erros.Count > 0) return Results.BadRequest(new { mensagem = erros[0], erros });
 
     if (await db.Utilizadores.AnyAsync(u => u.NomeUtilizador == nome))
         return Results.Conflict(new { mensagem = "Já existe uma conta com esse utilizador." });
@@ -280,7 +281,7 @@ app.MapPost("/api/utilizadores", async (NovoUtilizador novo, NexuVigContext db) 
 
 app.MapDelete("/api/utilizadores/{utilizador}", async (string utilizador, NexuVigContext db) =>
 {
-    string nome = utilizador.Trim().ToLowerInvariant();
+    string nome = NomesUtilizador.Normalizar(utilizador);
     var conta = await db.Utilizadores.FirstOrDefaultAsync(u => u.NomeUtilizador == nome);
     if (conta is null) return Results.NotFound(new { mensagem = "Conta não encontrada." });
 

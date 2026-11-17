@@ -1,4 +1,7 @@
 using System;
+using System.Globalization;
+using System.Linq;
+using System.Text;
 
 namespace NexuVig.Shared
 {
@@ -16,6 +19,35 @@ namespace NexuVig.Shared
 
         public static string Nome(string? perfil) =>
             perfil == Tecnico ? "Técnico" : perfil ?? "";
+    }
+
+    // Nome de utilizador simplificado: "João Silva" -> "joao.silva".
+    // Usado ao criar a conta e ao entrar, para acentos, maiúsculas e espaços não importarem.
+    public static class NomesUtilizador
+    {
+        public static string Normalizar(string? texto)
+        {
+            string semAcentos = new string(
+                (texto ?? "").Trim().ToLowerInvariant()
+                    .Normalize(NormalizationForm.FormD)
+                    .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                    .ToArray());
+
+            var resultado = new StringBuilder();
+            foreach (char c in semAcentos)
+            {
+                if (char.IsWhiteSpace(c))
+                {
+                    if (resultado.Length > 0 && resultado[^1] != '.') resultado.Append('.');
+                }
+                else if (char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')
+                {
+                    resultado.Append(c);
+                }
+            }
+
+            return resultado.ToString().Trim('.');
+        }
     }
 
     // Dashboard -> Server: confirmar utilizador e palavra-passe.

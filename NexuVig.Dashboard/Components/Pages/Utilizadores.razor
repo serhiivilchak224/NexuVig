@@ -101,8 +101,12 @@ else
                 <input @bind="novo.Nome" maxlength="100" placeholder="ex.: Professor João Silva" />
             </label>
             <label class="nv-campo">
-                <span>Utilizador</span>
-                <input @bind="novo.Utilizador" maxlength="30" autocomplete="off" placeholder="ex.: jsilva" />
+                <span>Utilizador (para entrar)</span>
+                <input @bind="novo.Utilizador" @bind:event="oninput" maxlength="40" autocomplete="off" placeholder="ex.: joao" />
+                @if (!string.IsNullOrWhiteSpace(novo.Utilizador) && NomesUtilizador.Normalizar(novo.Utilizador) != novo.Utilizador)
+                {
+                    <span class="nv-detalhe">Vai ficar: <strong>@NomesUtilizador.Normalizar(novo.Utilizador)</strong></span>
+                }
             </label>
             <label class="nv-campo">
                 <span>Palavra-passe (mínimo 10 caracteres, não pode ser comum)</span>
@@ -185,7 +189,7 @@ else
 
             if (resposta.IsSuccessStatusCode)
             {
-                Mostrar($"Conta \"{novo.Utilizador.Trim().ToLowerInvariant()}\" criada.", erro: false);
+                Mostrar($"Conta \"{NomesUtilizador.Normalizar(novo.Utilizador)}\" criada. Entra com esse utilizador.", erro: false);
                 novo = new();
                 await Carregar();
             }
