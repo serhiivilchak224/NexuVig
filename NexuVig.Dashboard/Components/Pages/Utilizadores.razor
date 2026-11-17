@@ -109,10 +109,18 @@ else
                 }
             </label>
             <label class="nv-campo">
-                <span>Palavra-passe (mínimo 10 caracteres, não pode ser comum)</span>
+                <span>Palavra-passe (mínimo 8 caracteres)</span>
                 @* Campo de texto com os caracteres escondidos (e não type="password"): assim o browser
                    não oferece guardar a palavra-passe da conta nova como se fosse a de quem está a criar. *@
-                <input @bind="novo.Password" type="text" class="nv-oculto" autocomplete="off" spellcheck="false" />
+                <input @bind="novo.Password" type="text" class="@(mostrarPassword ? "" : "nv-oculto")" autocomplete="off" spellcheck="false" />
+                <span class="nv-detalhe">
+                    <button type="button" class="nv-botao nv-botao-pequeno" @onclick="GerarPassword">
+                        <i class="bi bi-magic" aria-hidden="true"></i> Gerar
+                    </button>
+                    <button type="button" class="nv-botao nv-botao-pequeno" @onclick="() => mostrarPassword = !mostrarPassword">
+                        <i class="bi @(mostrarPassword ? "bi-eye-slash" : "bi-eye")" aria-hidden="true"></i> @(mostrarPassword ? "Esconder" : "Mostrar")
+                    </button>
+                </span>
             </label>
             <label class="nv-campo">
                 <span>Perfil</span>
@@ -146,6 +154,18 @@ else
     private List<UtilizadorInfo> contas = new();
     private NovoUtilizador novo = new();
     private string? aConfirmar;
+    private bool mostrarPassword;
+
+    // Palavra-passe aleatória fácil de ler e de passar à pessoa, ex.: "k7Pm-x3Qa-9vRt".
+    // Sem caracteres que se confundem (0/O, 1/l/I).
+    private void GerarPassword()
+    {
+        const string caracteres = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        string Bloco() => System.Security.Cryptography.RandomNumberGenerator.GetString(caracteres, 4);
+
+        novo.Password = $"{Bloco()}-{Bloco()}-{Bloco()}";
+        mostrarPassword = true;
+    }
     private bool aTrabalhar;
     private string? mensagem;
     private bool mensagemErro;
@@ -191,6 +211,7 @@ else
             {
                 Mostrar($"Conta \"{NomesUtilizador.Normalizar(novo.Utilizador)}\" criada. Entra com esse utilizador.", erro: false);
                 novo = new();
+                mostrarPassword = false;
                 await Carregar();
             }
             else

@@ -252,9 +252,9 @@ app.MapPost("/api/utilizadores", async (NovoUtilizador novo, NexuVigContext db) 
         erros.Add("O utilizador tem de ter entre 3 e 30 letras ou números.");
     if (string.IsNullOrWhiteSpace(novo.Nome) || novo.Nome.Length > 100)
         erros.Add("O nome é obrigatório (máximo 100 caracteres).");
-    if ((novo.Password ?? "").Length < 10)
-        erros.Add("A palavra-passe tem de ter pelo menos 10 caracteres.");
-    else if (PasswordsFracas.Motivo(novo.Password!, nome, novo.Nome ?? "") is string motivo)
+    if ((novo.Password ?? "").Length < 8)
+        erros.Add("A palavra-passe tem de ter pelo menos 8 caracteres.");
+    else if (PasswordsFracas.Motivo(novo.Password!) is string motivo)
         erros.Add(motivo);
     if (!Perfis.Valido(novo.Perfil))
         erros.Add("Perfil inválido.");

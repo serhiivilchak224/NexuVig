@@ -1,14 +1,17 @@
-using System.Text.RegularExpressions;
-
 namespace NexuVig.Server.Seguranca;
 
 // Recusa palavras-passe fáceis de adivinhar ao criar contas.
 // Estas são as primeiras que um atacante experimenta (listas de palavras-passe divulgadas).
 public static class PasswordsFracas
 {
-    // Palavras-passe comuns (com 10 ou mais caracteres, o mínimo exigido), em minúsculas.
+    // Palavras-passe comuns (com 8 ou mais caracteres, o mínimo exigido).
     private static readonly HashSet<string> Comuns = new(StringComparer.OrdinalIgnoreCase)
     {
+        "12345678", "123456789", "87654321", "11111111", "00000000", "12341234", "11223344",
+        "password", "password1", "passw0rd", "qwertyui", "qwerty123", "1q2w3e4r", "1qaz2wsx",
+        "abcd1234", "abc12345", "aa123456", "asdf1234", "asdfghjk", "zxcvbnm1", "iloveyou",
+        "admin123", "admin1234", "benfica1", "sporting", "portugal", "palavrapass", "sunshine",
+        "football", "princess", "superman", "starwars", "minecraft", "fortnite", "valorant",
         "1234567890", "0123456789", "9876543210", "12345678910", "123456789a", "a123456789",
         "1234567890a", "123456789abc", "1q2w3e4r5t", "1q2w3e4r5t6y", "1qaz2wsx3edc", "q1w2e3r4t5",
         "qwertyuiop", "qwerty1234", "qwerty12345", "qwerty123456", "asdfghjkl1", "asdfghjkl123",
@@ -27,31 +30,9 @@ public static class PasswordsFracas
     };
 
     // Devolve o motivo da recusa, ou null se a palavra-passe for aceitável.
-    public static string? Motivo(string password, string utilizador, string nome)
-    {
-        string p = password.ToLowerInvariant();
-
-        if (Comuns.Contains(p))
-            return "Essa palavra-passe é muito comum (aparece em listas de palavras-passe divulgadas). Escolhe outra.";
-
-        if (p.Distinct().Count() <= 3)
-            return "A palavra-passe repete demasiado os mesmos caracteres.";
-
-        if (Regex.IsMatch(p, "^[0-9]+$"))
-            return "A palavra-passe não pode ter só números.";
-
-        if (utilizador.Length >= 3 && p.Contains(utilizador.ToLowerInvariant()))
-            return "A palavra-passe não pode conter o nome de utilizador.";
-
-        foreach (string parte in nome.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (parte.Length >= 4 && p.Contains(parte))
-                return "A palavra-passe não pode conter o teu nome.";
-        }
-
-        if (p.Contains("nexuvig"))
-            return "A palavra-passe não pode conter o nome do sistema.";
-
-        return null;
-    }
+    // Só uma regra (além do mínimo de 8 caracteres): não pode ser uma palavra-passe comum.
+    public static string? Motivo(string password) =>
+        Comuns.Contains(password.Trim())
+            ? "Essa palavra-passe é muito fácil de adivinhar. Usa o botão Gerar ou escolhe outra."
+            : null;
 }

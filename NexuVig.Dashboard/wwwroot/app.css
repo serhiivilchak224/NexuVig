@@ -498,3 +498,8 @@ h1:focus {
             border-radius: 50%;
             background: var(--nv-acento);
         }
+
+.nv-botao-pequeno {
+    padding: .2rem .55rem;
+    font-size: .8rem;
+}
