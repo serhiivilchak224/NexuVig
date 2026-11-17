@@ -375,3 +375,59 @@ h1:focus {
     .blazor-error-boundary::after {
         content: "Ocorreu um erro.";
     }
+
+/* Sessão (nome e perfil de quem entrou) */
+.nv-sessao {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: 0 .75rem;
+    font-size: .9rem;
+}
+
+@media (max-width: 760px) {
+    .nv-sessao {
+        display: none;
+    }
+}
+
+    .nv-sessao > i {
+        font-size: 1.5rem;
+        color: var(--bs-secondary-color);
+    }
+
+.nv-sessao-nome {
+    font-weight: 600;
+}
+
+/* Formulários (página Utilizadores) */
+.nv-formulario {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    padding: 1.25rem;
+}
+
+.nv-campo {
+    display: grid;
+    gap: .35rem;
+    font-size: .9rem;
+}
+
+    .nv-campo input,
+    .nv-campo select {
+        padding: .55rem .7rem;
+        border-radius: 8px;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        font-size: .95rem;
+    }
+
+.nv-formulario-acoes {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using NexuVig.Shared;
 using NexuVig.Server.Data;
 using NexuVig.Server.Models;
+using NexuVig.Server.Seguranca;
 
 // O ambiente vem de ASPNETCORE_ENVIRONMENT (Development por defeito, para o trabalho local;
 // o Dockerfile define Production). User Secrets só são lidos em Development.
@@ -40,6 +41,8 @@ var app = builder.Build();
 //                                        ou X-Api-Key = NexuVig:ChaveApi (chave partilhada)
 // - GET  /api/medicoes (Dashboard)    -> X-Api-Key = NexuVig:ChaveDashboard
 // - /api/computadores/... (gestão)    -> X-Api-Key = NexuVig:ChaveDashboard
+// - /api/utilizadores, /api/autenticacao -> X-Api-Key = NexuVig:ChaveDashboard
+//   (só o Dashboard fala com estes endpoints; é o Dashboard que aplica os perfis)
 var chaveEsperada = builder.Configuration["NexuVig:ChaveApi"];
 var chaveDashboard = builder.Configuration["NexuVig:ChaveDashboard"];
 
@@ -74,7 +77,9 @@ app.Use(async (contexto, seguinte) =>
     bool eMedicoes = contexto.Request.Path.StartsWithSegments("/api/medicoes");
     bool eEnvio = eMedicoes && HttpMethods.IsPost(contexto.Request.Method);
     bool eLeitura = eMedicoes && HttpMethods.IsGet(contexto.Request.Method);
-    bool eGestao = contexto.Request.Path.StartsWithSegments("/api/computadores");
+    bool eGestao = contexto.Request.Path.StartsWithSegments("/api/computadores") ||
+                   contexto.Request.Path.StartsWithSegments("/api/utilizadores") ||
+                   contexto.Request.Path.StartsWithSegments("/api/autenticacao");
 
     // Com X-Agent-Token, o token é validado no próprio pedido (precisa do AgentId do corpo).
     bool comToken = eEnvio && contexto.Request.Headers.ContainsKey("X-Agent-Token");
@@ -209,6 +214,76 @@ app.MapDelete("/api/computadores/{agentId}", async (string agentId, NexuVigConte
     db.Computadores.Remove(computador);
     await db.SaveChangesAsync();
     return Results.Ok(new { mensagem = "Computador removido." });
+});
+
+// Contas do Dashboard (perfis Administrador e Técnico).
+static UtilizadorInfo ParaInfo(Utilizador u) => new()
+{
+    Utilizador = u.NomeUtilizador,
+    Nome = u.Nome,
+    Perfil = u.Perfil,
+    CriadoEm = new DateTimeOffset(u.CriadoEm, TimeSpan.Zero)
+};
+
+app.MapPost("/api/autenticacao", async (PedidoAutenticacao pedido, NexuVigContext db) =>
+{
+    string nome = (pedido.Utilizador ?? "").Trim().ToLowerInvariant();
+    var conta = await db.Utilizadores.FirstOrDefaultAsync(u => u.NomeUtilizador == nome);
+
+    // Verifica sempre um hash (mesmo sem conta), para o tempo de resposta ser igual.
+    bool valida = Passwords.Verificar(pedido.Password ?? "", conta?.PasswordHash ?? Passwords.HashFicticio);
+
+    return conta is not null && valida
+        ? Results.Ok(ParaInfo(conta))
+        : Results.Json(new { mensagem = "Utilizador ou palavra-passe incorretos." },
+            statusCode: StatusCodes.Status401Unauthorized);
+});
+
+app.MapGet("/api/utilizadores", async (NexuVigContext db) =>
+    Results.Ok((await db.Utilizadores.OrderBy(u => u.NomeUtilizador).ToListAsync()).Select(ParaInfo)));
+
+app.MapPost("/api/utilizadores", async (NovoUtilizador novo, NexuVigContext db) =>
+{
+    string nome = (novo.Utilizador ?? "").Trim().ToLowerInvariant();
+    var erros = new List<string>();
+
+    if (!System.Text.RegularExpressions.Regex.IsMatch(nome, "^[a-z0-9._-]{3,30}$"))
+        erros.Add("O utilizador tem de ter 3 a 30 caracteres: letras sem acentos, números, ponto, hífen ou _.");
+    if (string.IsNullOrWhiteSpace(novo.Nome) || novo.Nome.Length > 100)
+        erros.Add("O nome é obrigatório (máximo 100 caracteres).");
+    if ((novo.Password ?? "").Length < 10)
+        erros.Add("A palavra-passe tem de ter pelo menos 10 caracteres.");
+    if (!Perfis.Valido(novo.Perfil))
+        erros.Add("Perfil inválido.");
+
+    if (erros.Count > 0) return Results.BadRequest(new { mensagem = string.Join(" ", erros), erros });
+
+    if (await db.Utilizadores.AnyAsync(u => u.NomeUtilizador == nome))
+        return Results.Conflict(new { mensagem = "Já existe uma conta com esse utilizador." });
+
+    var conta = new Utilizador
+    {
+        NomeUtilizador = nome,
+        Nome = novo.Nome.Trim(),
+        PasswordHash = Passwords.CriarHash(novo.Password!),
+        Perfil = novo.Perfil,
+        CriadoEm = DateTime.UtcNow
+    };
+    db.Utilizadores.Add(conta);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(ParaInfo(conta));
+});
+
+app.MapDelete("/api/utilizadores/{utilizador}", async (string utilizador, NexuVigContext db) =>
+{
+    string nome = utilizador.Trim().ToLowerInvariant();
+    var conta = await db.Utilizadores.FirstOrDefaultAsync(u => u.NomeUtilizador == nome);
+    if (conta is null) return Results.NotFound(new { mensagem = "Conta não encontrada." });
+
+    db.Utilizadores.Remove(conta);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { mensagem = "Conta removida." });
 });
 
 app.MapPost("/api/medicoes", async (DadosEquipamento dados, HttpContext contexto, NexuVigContext db) =>

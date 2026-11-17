@@ -111,6 +111,41 @@ namespace NexuVig.Server.Migrations
                     b.ToTable("Medicoes");
                 });
 
+            modelBuilder.Entity("NexuVig.Server.Models.Utilizador", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("NomeUtilizador")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Perfil")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NomeUtilizador")
+                        .IsUnique();
+
+                    b.ToTable("Utilizadores");
+                });
+
             modelBuilder.Entity("NexuVig.Server.Models.Medicao", b =>
                 {
                     b.HasOne("NexuVig.Server.Models.Computador", "Computador")

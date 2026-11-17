@@ -106,12 +106,19 @@
                             </td>
                             <td>@Monitorizacao.TempoDesde(pc.DataHora)</td>
                             <td style="white-space: nowrap; text-align: right;">
-                                <button class="nv-botao" disabled="@aGerir" @onclick="() => Aprovar(pc)">
-                                    <i class="bi bi-check-lg" aria-hidden="true"></i> Aprovar
-                                </button>
-                                <button class="nv-botao" disabled="@aGerir" @onclick="() => Rejeitar(pc)">
-                                    <i class="bi bi-x-lg" aria-hidden="true"></i> Rejeitar
-                                </button>
+                                @if (eAdministrador)
+                                {
+                                    <button class="nv-botao" disabled="@aGerir" @onclick="() => Aprovar(pc)">
+                                        <i class="bi bi-check-lg" aria-hidden="true"></i> Aprovar
+                                    </button>
+                                    <button class="nv-botao" disabled="@aGerir" @onclick="() => Rejeitar(pc)">
+                                        <i class="bi bi-x-lg" aria-hidden="true"></i> Rejeitar
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="nv-detalhe">Só um administrador pode aprovar</span>
+                                }
                             </td>
                         </tr>
                     }
@@ -215,6 +222,10 @@
     private List<DadosEquipamento> equipamentos = new();
     private List<DadosEquipamento> pendentes = new();
     private bool aGerir;
+    private bool eAdministrador;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? EstadoAutenticacao { get; set; }
     private string? erroGestao;
     private bool? servidorOnline;
     private DateTimeOffset? ultimaAtualizacao;
@@ -227,6 +238,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (EstadoAutenticacao is not null)
+            eAdministrador = (await EstadoAutenticacao).User.IsInRole(Perfis.Administrador);
+
         await CarregarDados();
 
         temporizador = new System.Threading.Timer(async _ =>
@@ -279,7 +293,7 @@
 
     private async Task Gerir(Func<Task<HttpResponseMessage>> pedido)
     {
-        if (aGerir) return;
+        if (aGerir || !eAdministrador) return;
 
         aGerir = true;
         erroGestao = null;

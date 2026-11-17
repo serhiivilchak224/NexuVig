@@ -44,7 +44,10 @@ else
             }
             <span class="nv-pilula @(online ? "nv-ok" : "nv-perigo")">@(online ? "Online" : "Sem comunicação")</span>
 
-            @if (!aConfirmarRemocao)
+            @if (!eAdministrador)
+            {
+            }
+            else if (!aConfirmarRemocao)
             {
                 <button class="nv-botao" @onclick="() => aConfirmarRemocao = true">
                     <i class="bi bi-trash" aria-hidden="true"></i> Remover
@@ -167,12 +170,22 @@ else
     }
 
     private bool aConfirmarRemocao;
+    private bool eAdministrador;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? EstadoAutenticacao { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (EstadoAutenticacao is not null)
+            eAdministrador = (await EstadoAutenticacao).User.IsInRole(Perfis.Administrador);
+    }
     private bool aRemover;
     private string? erroRemocao;
 
     private async Task Remover()
     {
-        if (aRemover) return;
+        if (aRemover || !eAdministrador) return;
 
         aRemover = true;
         erroRemocao = null;

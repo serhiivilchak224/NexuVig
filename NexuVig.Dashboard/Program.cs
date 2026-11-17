@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using NexuVig.Dashboard;
 using NexuVig.Dashboard.Components;
+using NexuVig.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +51,10 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         opcoes.LoginPath = "/entrar";
     });
 
+// Perfis (Administrador / Técnico) disponíveis nos componentes (AuthorizeView, AuthenticationState).
+builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -66,18 +72,26 @@ if (string.IsNullOrWhiteSpace(porta))
     app.UseHttpsRedirection();
 
 app.UseAuthentication();
+app.UseAuthorization();
 
 var nomeAdmin = builder.Configuration["NexuVig:Admin:Utilizador"];
 if (string.IsNullOrWhiteSpace(nomeAdmin)) nomeAdmin = "admin";
 var passwordAdmin = builder.Configuration["NexuVig:Admin:Password"];
 
+// Duas formas de entrar:
+// - conta de recuperação (NexuVig:Admin:Utilizador / NexuVig:Admin:Password), sempre Administrador;
+// - contas criadas na página Utilizadores, guardadas no Server (perfil Administrador ou Técnico).
 // Em Development, sem password configurada, o login fica desligado (para trabalhar localmente).
-// Em qualquer outro ambiente, sem password nada é acessível.
 bool loginAtivo = !(app.Environment.IsDevelopment() && string.IsNullOrEmpty(passwordAdmin));
 if (!loginAtivo)
     app.Logger.LogWarning("NexuVig:Admin:Password não está configurada: login desligado (só em Development).");
 else if (string.IsNullOrEmpty(passwordAdmin))
-    app.Logger.LogWarning("NexuVig:Admin:Password não está configurada: ninguém consegue entrar.");
+    app.Logger.LogWarning("NexuVig:Admin:Password não está configurada: só entram as contas criadas no Server.");
+
+// Utilizador usado quando o login está desligado (só em Development).
+var utilizadorDesenvolvimento = new ClaimsPrincipal(new ClaimsIdentity(
+    [new Claim(ClaimTypes.Name, "dev"), new Claim("nome", "Desenvolvimento"), new Claim(ClaimTypes.Role, Perfis.Administrador)],
+    "Desenvolvimento"));
 
 static byte[] Hash(string texto) => SHA256.HashData(Encoding.UTF8.GetBytes(texto));
 
@@ -86,7 +100,14 @@ string[] extensoesPublicas = [".css", ".js", ".map", ".png", ".ico", ".svg", ".w
 // Porta de entrada: só utilizadores autenticados chegam às páginas e ao /_blazor.
 app.Use(async (contexto, seguinte) =>
 {
-    if (!loginAtivo || contexto.User.Identity?.IsAuthenticated == true)
+    if (!loginAtivo)
+    {
+        contexto.User = utilizadorDesenvolvimento;
+        await seguinte();
+        return;
+    }
+
+    if (contexto.User.Identity?.IsAuthenticated == true)
     {
         await seguinte();
         return;
@@ -154,7 +175,7 @@ app.MapGet("/saude", () => Results.Text("ok"));
 
 app.MapGet("/entrar", () => Results.Content(PaginaEntrar(null), "text/html; charset=utf-8"));
 
-app.MapPost("/entrar", async (HttpContext contexto) =>
+app.MapPost("/entrar", async (HttpContext contexto, HttpClient servidor) =>
 {
     string ip = contexto.Connection.RemoteIpAddress?.ToString() ?? "desconhecido";
 
@@ -171,12 +192,41 @@ app.MapPost("/entrar", async (HttpContext contexto) =>
     string utilizador = formulario["utilizador"].ToString();
     string password = formulario["password"].ToString();
 
-    // Os dois campos são sempre comparados (sem sair cedo), em tempo constante.
+    // 1) Conta de recuperação: os dois campos são sempre comparados (sem sair cedo), em tempo constante.
     bool utilizadorOk = CryptographicOperations.FixedTimeEquals(Hash(utilizador), Hash(nomeAdmin!));
     bool passwordOk = !string.IsNullOrEmpty(passwordAdmin) &&
                       CryptographicOperations.FixedTimeEquals(Hash(password), Hash(passwordAdmin));
 
-    if (!(utilizadorOk && passwordOk))
+    UtilizadorInfo? conta = utilizadorOk && passwordOk
+        ? new UtilizadorInfo { Utilizador = nomeAdmin!, Nome = "Administrador", Perfil = Perfis.Administrador }
+        : null;
+
+    // 2) Contas guardadas no Server.
+    bool servidorIndisponivel = false;
+    if (conta is null && utilizador.Length > 0 && password.Length > 0)
+    {
+        try
+        {
+            using var resposta = await servidor.PostAsJsonAsync("/api/autenticacao",
+                new PedidoAutenticacao { Utilizador = utilizador, Password = password });
+
+            if (resposta.IsSuccessStatusCode)
+                conta = await resposta.Content.ReadFromJsonAsync<UtilizadorInfo>();
+            else if (resposta.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+                servidorIndisponivel = true;
+        }
+        catch (Exception erro)
+        {
+            servidorIndisponivel = true;
+            app.Logger.LogWarning(erro, "Não foi possível contactar o Server para confirmar o login.");
+        }
+    }
+
+    if (servidorIndisponivel && conta is null)
+        return Results.Content(PaginaEntrar("O Server não respondeu (pode estar a arrancar). Tenta novamente dentro de um minuto."),
+            "text/html; charset=utf-8", Encoding.UTF8, StatusCodes.Status503ServiceUnavailable);
+
+    if (conta is null || !Perfis.Valido(conta.Perfil))
     {
         falhas.AddOrUpdate(ip,
             _ => (1, DateTime.UtcNow),
@@ -188,7 +238,11 @@ app.MapPost("/entrar", async (HttpContext contexto) =>
     falhas.TryRemove(ip, out _);
 
     var identidade = new ClaimsIdentity(
-        [new Claim(ClaimTypes.Name, nomeAdmin!), new Claim(ClaimTypes.Role, "Administrador")],
+        [
+            new Claim(ClaimTypes.Name, conta.Utilizador),
+            new Claim("nome", string.IsNullOrWhiteSpace(conta.Nome) ? conta.Utilizador : conta.Nome),
+            new Claim(ClaimTypes.Role, conta.Perfil)
+        ],
         CookieAuthenticationDefaults.AuthenticationScheme);
 
     await contexto.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,

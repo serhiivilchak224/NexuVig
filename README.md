@@ -26,7 +26,7 @@ C# (.NET 10), ASP.NET Core, Blazor, Entity Framework Core, PostgreSQL (Supabase)
 - [x] Dashboard com alertas e página de detalhes
 - [x] Agent como Serviço do Windows
 - [x] Segurança da API (API Key)
-- [x] Login de administrador no Dashboard (perfis de utilizador por fazer)
+- [x] Login no Dashboard com contas e perfis (Administrador e Técnico)
 - [ ] Registo de avarias e intervenções
 - [x] Instalador (Setup.exe) com o Agent e o programa NexuVig
 - [x] Registo automático dos computadores, com aprovação do administrador
@@ -56,6 +56,20 @@ Quem instala o NexuVig a partir da página de descarga não precisa de chave:
 3. O administrador **aprova** ou **rejeita** com um clique. Depois de aprovado, as medições passam a contar.
 
 Proteções: limite de 5 registos por hora por endereço IP, máximo de 50 computadores por aprovar, e um computador que já tem token não pode ser registado outra vez (o administrador tem de o remover primeiro). A chave partilhada (`NexuVig:ChaveApi`) continua a funcionar para instalações feitas pelo administrador, que ficam logo aprovadas.
+
+### Contas e perfis
+
+O Dashboard tem dois perfis:
+
+| Perfil | Pode |
+|---|---|
+| Administrador | ver tudo, aprovar, rejeitar e remover computadores, gerir utilizadores |
+| Técnico | ver o painel e os detalhes dos computadores (por exemplo, um professor) |
+
+- As contas criam-se na página **Utilizadores** (só administradores) e ficam na tabela `Utilizadores` da base de dados. A palavra-passe nunca é guardada: o Server guarda um hash PBKDF2 (SHA-256, sal aleatório, 210 000 iterações).
+- A conta definida em `NexuVig:Admin:Utilizador` / `NexuVig:Admin:Password` continua a funcionar como **conta de recuperação** (sempre Administrador), para não ficar sem acesso se as outras forem apagadas.
+- Os endpoints de contas (`/api/autenticacao`, `/api/utilizadores`) só aceitam pedidos com a chave do Dashboard: os utilizadores nunca falam diretamente com o Server. Os perfis são aplicados pelo Dashboard, que esconde e bloqueia as ações que o perfil não permite.
+- Limitação conhecida: uma sessão aberta dura até 8 horas, mesmo que a conta seja removida entretanto.
 
 ### Página de descarga e instalador automático
 

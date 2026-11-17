@@ -1,0 +1,255 @@
+@page "/utilizadores"
+@inject HttpClient Http
+
+<PageTitle>NexuVig - Utilizadores</PageTitle>
+
+@if (!verificado)
+{
+    <div class="nv-cartao nv-vazio">A carregar...</div>
+}
+else if (!eAdministrador)
+{
+    <div class="nv-cartao nv-vazio">
+        <i class="bi bi-shield-lock" aria-hidden="true"></i>
+        <div>Só um administrador pode gerir utilizadores.</div>
+    </div>
+}
+else
+{
+    <div class="nv-cabecalho">
+        <div>
+            <h1 class="nv-titulo">Utilizadores</h1>
+            <div class="nv-subtitulo">Contas que podem entrar no painel</div>
+        </div>
+    </div>
+
+    <div class="nv-cartao" style="margin-bottom: 1.25rem;">
+        <div class="nv-cartao-cabecalho"><span>Perfis</span></div>
+        <div style="padding: 1rem 1.25rem;">
+            <div><strong>Administrador</strong> <span class="nv-detalhe">— vê tudo, aprova, rejeita e remove computadores, gere utilizadores.</span></div>
+            <div><strong>Técnico</strong> <span class="nv-detalhe">— vê o painel e os detalhes dos computadores (por exemplo, um professor).</span></div>
+        </div>
+    </div>
+
+    <div class="nv-cartao" style="margin-bottom: 1.25rem;">
+        <div class="nv-cartao-cabecalho">
+            <span>Contas</span>
+            <span class="nv-subtitulo" style="margin: 0; font-weight: 400;">@contas.Count no total</span>
+        </div>
+
+        @if (contas.Count == 0)
+        {
+            <div class="nv-vazio">
+                <i class="bi bi-people" aria-hidden="true"></i>
+                <div>Ainda não há contas. Até lá só entra a conta de recuperação (definida no Render).</div>
+            </div>
+        }
+        else
+        {
+            <div class="nv-tabela-scroll">
+                <table class="nv-tabela">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Utilizador</th>
+                            <th>Perfil</th>
+                            <th>Criada</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var conta in contas)
+                        {
+                            <tr>
+                                <td><span class="nv-nome">@conta.Nome</span></td>
+                                <td>@conta.Utilizador</td>
+                                <td>
+                                    <span class="nv-pilula @(conta.Perfil == Perfis.Administrador ? "nv-aviso" : "nv-neutro")">@Perfis.Nome(conta.Perfil)</span>
+                                </td>
+                                <td><span class="nv-detalhe">@conta.CriadoEm.ToLocalTime().ToString("dd/MM/yyyy")</span></td>
+                                <td style="white-space: nowrap; text-align: right;">
+                                    @if (conta.Utilizador == utilizadorAtual)
+                                    {
+                                        <span class="nv-detalhe">a tua conta</span>
+                                    }
+                                    else if (aConfirmar == conta.Utilizador)
+                                    {
+                                        <button class="nv-botao" style="color: var(--nv-perigo);" disabled="@aTrabalhar" @onclick="() => Remover(conta)">Confirmar</button>
+                                        <button class="nv-botao" disabled="@aTrabalhar" @onclick="() => aConfirmar = null">Cancelar</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="nv-botao" disabled="@aTrabalhar" @onclick="() => aConfirmar = conta.Utilizador">
+                                            <i class="bi bi-trash" aria-hidden="true"></i> Remover
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="nv-cartao">
+        <div class="nv-cartao-cabecalho"><span>Nova conta</span></div>
+
+        <div class="nv-formulario">
+            <label class="nv-campo">
+                <span>Nome</span>
+                <input @bind="novo.Nome" maxlength="100" placeholder="ex.: Professor João Silva" />
+            </label>
+            <label class="nv-campo">
+                <span>Utilizador</span>
+                <input @bind="novo.Utilizador" maxlength="30" autocomplete="off" placeholder="ex.: jsilva" />
+            </label>
+            <label class="nv-campo">
+                <span>Palavra-passe (mínimo 10 caracteres)</span>
+                <input @bind="novo.Password" type="password" autocomplete="new-password" />
+            </label>
+            <label class="nv-campo">
+                <span>Perfil</span>
+                <select @bind="novo.Perfil">
+                    <option value="@Perfis.Tecnico">Técnico</option>
+                    <option value="@Perfis.Administrador">Administrador</option>
+                </select>
+            </label>
+
+            <div class="nv-formulario-acoes">
+                <button class="nv-botao" disabled="@aTrabalhar" @onclick="Criar">
+                    <i class="bi bi-person-plus" aria-hidden="true"></i> Criar conta
+                </button>
+                @if (mensagem is not null)
+                {
+                    <span class="nv-detalhe" style="color: @(mensagemErro ? "var(--nv-perigo)" : "var(--nv-ok)");">@mensagem</span>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? EstadoAutenticacao { get; set; }
+
+    private bool verificado;
+    private bool eAdministrador;
+    private string? utilizadorAtual;
+
+    private List<UtilizadorInfo> contas = new();
+    private NovoUtilizador novo = new();
+    private string? aConfirmar;
+    private bool aTrabalhar;
+    private string? mensagem;
+    private bool mensagemErro;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (EstadoAutenticacao is not null)
+        {
+            var utilizador = (await EstadoAutenticacao).User;
+            eAdministrador = utilizador.IsInRole(Perfis.Administrador);
+            utilizadorAtual = utilizador.Identity?.Name;
+        }
+
+        verificado = true;
+
+        if (eAdministrador)
+            await Carregar();
+    }
+
+    private async Task Carregar()
+    {
+        try
+        {
+            contas = await Http.GetFromJsonAsync<List<UtilizadorInfo>>("/api/utilizadores") ?? new();
+        }
+        catch (Exception erro)
+        {
+            Mostrar("Não foi possível contactar o Server.", erro: true);
+            Console.WriteLine($"Erro ao carregar utilizadores: {erro.Message}");
+        }
+    }
+
+    private async Task Criar()
+    {
+        if (aTrabalhar || !eAdministrador) return;
+        aTrabalhar = true;
+
+        try
+        {
+            using var resposta = await Http.PostAsJsonAsync("/api/utilizadores", novo);
+
+            if (resposta.IsSuccessStatusCode)
+            {
+                Mostrar($"Conta \"{novo.Utilizador.Trim().ToLowerInvariant()}\" criada.", erro: false);
+                novo = new();
+                await Carregar();
+            }
+            else
+            {
+                Mostrar(await LerMensagem(resposta), erro: true);
+            }
+        }
+        catch (Exception erro)
+        {
+            Mostrar("Não foi possível contactar o Server.", erro: true);
+            Console.WriteLine($"Erro ao criar utilizador: {erro.Message}");
+        }
+
+        aTrabalhar = false;
+    }
+
+    private async Task Remover(UtilizadorInfo conta)
+    {
+        if (aTrabalhar || !eAdministrador || conta.Utilizador == utilizadorAtual) return;
+        aTrabalhar = true;
+
+        try
+        {
+            using var resposta = await Http.DeleteAsync($"/api/utilizadores/{Uri.EscapeDataString(conta.Utilizador)}");
+
+            if (resposta.IsSuccessStatusCode)
+                Mostrar($"Conta \"{conta.Utilizador}\" removida.", erro: false);
+            else
+                Mostrar(await LerMensagem(resposta), erro: true);
+        }
+        catch (Exception erro)
+        {
+            Mostrar("Não foi possível contactar o Server.", erro: true);
+            Console.WriteLine($"Erro ao remover utilizador: {erro.Message}");
+        }
+
+        aConfirmar = null;
+        await Carregar();
+        aTrabalhar = false;
+    }
+
+    private void Mostrar(string texto, bool erro)
+    {
+        mensagem = texto;
+        mensagemErro = erro;
+    }
+
+    // O Server responde com { "mensagem": "..." } nos erros.
+    private static async Task<string> LerMensagem(HttpResponseMessage resposta)
+    {
+        try
+        {
+            var corpo = await resposta.Content.ReadFromJsonAsync<RespostaErro>();
+            if (!string.IsNullOrWhiteSpace(corpo?.Mensagem)) return corpo.Mensagem;
+        }
+        catch
+        {
+            // Resposta sem JSON: usa a mensagem genérica.
+        }
+
+        return $"O Server recusou o pedido (HTTP {(int)resposta.StatusCode}).";
+    }
+
+    private sealed class RespostaErro
+    {
+        public string? Mensagem { get; set; }
+    }
+}
