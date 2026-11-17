@@ -27,7 +27,7 @@ C# (.NET 10), ASP.NET Core, Blazor, Entity Framework Core, PostgreSQL (Supabase)
 - [x] Agent como Serviço do Windows
 - [x] Segurança da API (API Key)
 - [x] Login no Dashboard com contas e perfis (Administrador e Técnico)
-- [ ] Registo de avarias e intervenções
+- [x] Registo de avarias e intervenções
 - [x] Instalador (Setup.exe) com o Agent e o programa NexuVig
 - [x] Registo automático dos computadores, com aprovação do administrador
 - [x] Página de descarga e instalador criado automaticamente (GitHub Actions)
@@ -70,6 +70,15 @@ O Dashboard tem dois perfis:
 - A conta definida em `NexuVig:Admin:Utilizador` / `NexuVig:Admin:Password` continua a funcionar como **conta de recuperação** (sempre Administrador), para não ficar sem acesso se as outras forem apagadas.
 - Os endpoints de contas (`/api/autenticacao`, `/api/utilizadores`) só aceitam pedidos com a chave do Dashboard: os utilizadores nunca falam diretamente com o Server. Os perfis são aplicados pelo Dashboard, que esconde e bloqueia as ações que o perfil não permite.
 - Limitação conhecida: uma sessão aberta dura até 8 horas, mesmo que a conta seja removida entretanto.
+
+### Avarias e intervenções
+
+- Página **Avarias**: lista das avarias (por resolver, resolvidas ou todas), ordenadas por prioridade, e formulário para registar uma avaria num equipamento (título, descrição, prioridade Baixa/Média/Alta).
+- Cada avaria tem um **histórico de intervenções** (o que foi feito, quem fez e quando). Ao registar uma intervenção pode mudar-se o estado: Aberta → Em curso → Resolvida (ou reabrir). O tempo até à resolução fica registado.
+- O autor é sempre a conta que entrou no Dashboard (nome e utilizador), não um campo escrito à mão.
+- Administradores e técnicos registam avarias e intervenções; só administradores apagam avarias.
+- O painel mostra uma etiqueta com o número de avarias por resolver de cada equipamento, e a página do equipamento lista-as, com um botão para registar uma nova.
+- Tabelas `Avarias` e `Intervencoes` (migração `AdicionarAvarias`). Remover um equipamento apaga também as suas avarias.
 
 ### Página de descarga e instalador automático
 

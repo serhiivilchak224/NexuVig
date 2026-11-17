@@ -5,7 +5,7 @@ name: Compilar e criar instalador
 
 on:
   push:
-    branches: [master, alojamento-online, app-descarga, contas-perfis]
+    branches: [master, alojamento-online, app-descarga, contas-perfis, avarias]
   pull_request:
   workflow_dispatch:
 

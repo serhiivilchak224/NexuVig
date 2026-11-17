@@ -205,7 +205,11 @@
                                 @if (Monitorizacao.CpuAlta(pc)) { <span class="nv-etiqueta nv-perigo">CPU alta</span> }
                                 @if (Monitorizacao.RamAlta(pc)) { <span class="nv-etiqueta nv-perigo">RAM alta</span> }
                                 @if (Monitorizacao.DiscoCheio(pc)) { <span class="nv-etiqueta nv-aviso">Disco cheio</span> }
-                                @if (!Monitorizacao.TemAlerta(pc)) { <span class="nv-detalhe">—</span> }
+                                @if (avariasAbertas.TryGetValue(pc.AgentId, out int numeroAvarias))
+                                {
+                                    <a class="nv-etiqueta nv-aviso" href="/avarias" style="text-decoration: none;">@(numeroAvarias == 1 ? "1 avaria" : $"{numeroAvarias} avarias")</a>
+                                }
+                                @if (!Monitorizacao.TemAlerta(pc) && !avariasAbertas.ContainsKey(pc.AgentId)) { <span class="nv-detalhe">—</span> }
                             </td>
                         </tr>
                     }
@@ -222,6 +226,7 @@
     private List<DadosEquipamento> equipamentos = new();
     private List<DadosEquipamento> pendentes = new();
     private bool aGerir;
+    private Dictionary<string, int> avariasAbertas = new();
     private bool eAdministrador;
 
     [CascadingParameter]
@@ -261,6 +266,17 @@
             var todos = resposta ?? new();
             equipamentos = todos.Where(e => e.Aprovado).ToList();
             pendentes = todos.Where(e => !e.Aprovado).ToList();
+
+            try
+            {
+                var avarias = await Http.GetFromJsonAsync<List<AvariaResumo>>("/api/avarias?estado=abertas") ?? new();
+                avariasAbertas = avarias.GroupBy(a => a.AgentId).ToDictionary(g => g.Key, g => g.Count());
+            }
+            catch (Exception erro)
+            {
+                // Sem a lista de avarias o painel continua a funcionar (só sem as etiquetas).
+                Console.WriteLine($"Erro ao carregar avarias: {erro.Message}");
+            }
             servidorOnline = true;
             ultimaAtualizacao = DateTimeOffset.UtcNow;
         }

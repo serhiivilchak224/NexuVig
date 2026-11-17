@@ -118,6 +118,35 @@ else
         </div>
     </div>
 
+    <div class="nv-cartao" style="margin-bottom: 1.5rem;">
+        <div class="nv-cartao-cabecalho">
+            <span>Avarias por resolver</span>
+            <a class="nv-botao" href="/avarias?equipamento=@pc.AgentId" style="text-decoration: none;">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Registar avaria
+            </a>
+        </div>
+
+        @if (avarias.Count == 0)
+        {
+            <div class="nv-detalhe" style="padding: 1rem 1.25rem;">Nenhuma avaria por resolver neste equipamento.</div>
+        }
+        else
+        {
+            <ul class="nv-lista">
+                @foreach (var a in avarias)
+                {
+                    <li>
+                        <span><a class="nv-nome" href="/avarias/@a.Id">@a.Titulo</a></span>
+                        <span>
+                            <span class="nv-pilula @Avarias.ClassePrioridade(a.Prioridade)">@Prioridades.Nome(a.Prioridade)</span>
+                            <span class="nv-pilula @Avarias.ClasseEstado(a.Estado)">@EstadosAvaria.Nome(a.Estado)</span>
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
     <div class="nv-cartao">
         <div class="nv-cartao-cabecalho">Informação do equipamento</div>
         <ul class="nv-lista">
@@ -135,6 +164,7 @@ else
     [Parameter] public string AgentId { get; set; } = "";
 
     private DadosEquipamento? pc;
+    private List<AvariaResumo> avarias = new();
     private bool aCarregar = true;
     private bool? servidorOnline;
     private System.Threading.Timer? temporizador;
@@ -161,6 +191,10 @@ else
             var lista = await Http.GetFromJsonAsync<List<DadosEquipamento>>("/api/medicoes");
             pc = lista?.FirstOrDefault(e => e.AgentId == AgentId);
             servidorOnline = true;
+
+            if (pc is not null)
+                avarias = await Http.GetFromJsonAsync<List<AvariaResumo>>(
+                    $"/api/avarias?estado=abertas&agentId={Uri.EscapeDataString(AgentId)}") ?? new();
         }
         catch (Exception erro)
         {

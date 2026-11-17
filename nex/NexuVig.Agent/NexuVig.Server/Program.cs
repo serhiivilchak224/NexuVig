@@ -41,7 +41,7 @@ var app = builder.Build();
 //                                        ou X-Api-Key = NexuVig:ChaveApi (chave partilhada)
 // - GET  /api/medicoes (Dashboard)    -> X-Api-Key = NexuVig:ChaveDashboard
 // - /api/computadores/... (gestão)    -> X-Api-Key = NexuVig:ChaveDashboard
-// - /api/utilizadores, /api/autenticacao -> X-Api-Key = NexuVig:ChaveDashboard
+// - /api/utilizadores, /api/autenticacao, /api/avarias -> X-Api-Key = NexuVig:ChaveDashboard
 //   (só o Dashboard fala com estes endpoints; é o Dashboard que aplica os perfis)
 var chaveEsperada = builder.Configuration["NexuVig:ChaveApi"];
 var chaveDashboard = builder.Configuration["NexuVig:ChaveDashboard"];
@@ -79,7 +79,8 @@ app.Use(async (contexto, seguinte) =>
     bool eLeitura = eMedicoes && HttpMethods.IsGet(contexto.Request.Method);
     bool eGestao = contexto.Request.Path.StartsWithSegments("/api/computadores") ||
                    contexto.Request.Path.StartsWithSegments("/api/utilizadores") ||
-                   contexto.Request.Path.StartsWithSegments("/api/autenticacao");
+                   contexto.Request.Path.StartsWithSegments("/api/autenticacao") ||
+                   contexto.Request.Path.StartsWithSegments("/api/avarias");
 
     // Com X-Agent-Token, o token é validado no próprio pedido (precisa do AgentId do corpo).
     bool comToken = eEnvio && contexto.Request.Headers.ContainsKey("X-Agent-Token");
@@ -284,6 +285,177 @@ app.MapDelete("/api/utilizadores/{utilizador}", async (string utilizador, NexuVi
     db.Utilizadores.Remove(conta);
     await db.SaveChangesAsync();
     return Results.Ok(new { mensagem = "Conta removida." });
+});
+
+// Avarias e intervenções. O autor (nome de quem regista) vem do Dashboard, que sabe quem entrou.
+static DateTimeOffset Utc(DateTime data) => new(DateTime.SpecifyKind(data, DateTimeKind.Utc));
+
+static string Limpar(string? texto, int maximo)
+{
+    string limpo = (texto ?? "").Trim();
+    return limpo.Length > maximo ? limpo[..maximo] : limpo;
+}
+
+app.MapGet("/api/avarias", async (string? estado, string? agentId, NexuVigContext db) =>
+{
+    var consulta = db.Avarias.AsQueryable();
+
+    // estado: "abertas" (Aberta + Em curso, por defeito), "resolvidas" ou "todas"
+    if (estado is null or "abertas")
+        consulta = consulta.Where(a => a.Estado != EstadosAvaria.Resolvida);
+    else if (estado == "resolvidas")
+        consulta = consulta.Where(a => a.Estado == EstadosAvaria.Resolvida);
+
+    if (!string.IsNullOrWhiteSpace(agentId))
+        consulta = consulta.Where(a => a.Computador.AgentId == agentId);
+
+    var linhas = await consulta
+        .Select(a => new
+        {
+            a.Id,
+            a.Computador.AgentId,
+            Computador = a.Computador.Nome,
+            a.Titulo,
+            a.Prioridade,
+            a.Estado,
+            a.Autor,
+            a.CriadaEm,
+            a.ResolvidaEm,
+            NumeroIntervencoes = a.Intervencoes.Count,
+            UltimaIntervencao = a.Intervencoes.Max(i => (DateTime?)i.Data)
+        })
+        .ToListAsync();
+
+    var resultado = linhas
+        .Select(a => new AvariaResumo
+        {
+            Id = a.Id,
+            AgentId = a.AgentId,
+            Computador = a.Computador,
+            Titulo = a.Titulo,
+            Prioridade = a.Prioridade,
+            Estado = a.Estado,
+            Autor = a.Autor,
+            CriadaEm = Utc(a.CriadaEm),
+            ResolvidaEm = a.ResolvidaEm is DateTime r ? Utc(r) : null,
+            NumeroIntervencoes = a.NumeroIntervencoes,
+            UltimaAtualizacao = Utc(a.UltimaIntervencao ?? a.CriadaEm)
+        })
+        // Por resolver primeiro, depois pela prioridade e pela data (mais recentes primeiro).
+        .OrderBy(a => a.Estado == EstadosAvaria.Resolvida)
+        .ThenBy(a => Prioridades.Ordem(a.Prioridade))
+        .ThenByDescending(a => a.UltimaAtualizacao)
+        .ToList();
+
+    return Results.Ok(resultado);
+});
+
+app.MapGet("/api/avarias/{id:int}", async (int id, NexuVigContext db) =>
+{
+    var a = await db.Avarias
+        .Include(x => x.Computador)
+        .Include(x => x.Intervencoes)
+        .FirstOrDefaultAsync(x => x.Id == id);
+
+    if (a is null) return Results.NotFound(new { mensagem = "Avaria não encontrada." });
+
+    var intervencoes = a.Intervencoes.OrderBy(i => i.Data).ToList();
+
+    return Results.Ok(new AvariaDetalhe
+    {
+        Id = a.Id,
+        AgentId = a.Computador.AgentId,
+        Computador = a.Computador.Nome,
+        Titulo = a.Titulo,
+        Descricao = a.Descricao,
+        Prioridade = a.Prioridade,
+        Estado = a.Estado,
+        Autor = a.Autor,
+        CriadaEm = Utc(a.CriadaEm),
+        ResolvidaEm = a.ResolvidaEm is DateTime r ? Utc(r) : null,
+        NumeroIntervencoes = intervencoes.Count,
+        UltimaAtualizacao = Utc(intervencoes.Count > 0 ? intervencoes[^1].Data : a.CriadaEm),
+        Intervencoes = intervencoes.Select(i => new IntervencaoInfo
+        {
+            Id = i.Id,
+            Data = Utc(i.Data),
+            Descricao = i.Descricao,
+            Autor = i.Autor
+        }).ToList()
+    });
+});
+
+app.MapPost("/api/avarias", async (NovaAvaria nova, NexuVigContext db) =>
+{
+    var erros = new List<string>();
+    if (string.IsNullOrWhiteSpace(nova.Titulo)) erros.Add("O título é obrigatório.");
+    if (!Prioridades.Valida(nova.Prioridade)) erros.Add("Prioridade inválida.");
+    if (string.IsNullOrWhiteSpace(nova.Autor)) erros.Add("Falta o autor.");
+
+    var computador = await db.Computadores.FirstOrDefaultAsync(c => c.AgentId == nova.AgentId && c.Aprovado);
+    if (computador is null) erros.Add("Escolhe um equipamento.");
+
+    if (erros.Count > 0) return Results.BadRequest(new { mensagem = string.Join(" ", erros), erros });
+
+    var avaria = new Avaria
+    {
+        Computador = computador!,
+        Titulo = Limpar(nova.Titulo, 150),
+        Descricao = Limpar(nova.Descricao, 4000),
+        Prioridade = nova.Prioridade,
+        Estado = EstadosAvaria.Aberta,
+        Autor = Limpar(nova.Autor, 150),
+        CriadaEm = DateTime.UtcNow
+    };
+
+    db.Avarias.Add(avaria);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { id = avaria.Id, mensagem = "Avaria registada." });
+});
+
+app.MapPost("/api/avarias/{id:int}/intervencoes", async (int id, NovaIntervencao nova, NexuVigContext db) =>
+{
+    var avaria = await db.Avarias.FirstOrDefaultAsync(a => a.Id == id);
+    if (avaria is null) return Results.NotFound(new { mensagem = "Avaria não encontrada." });
+
+    bool mudaEstado = !string.IsNullOrEmpty(nova.NovoEstado);
+    if (mudaEstado && !EstadosAvaria.Valido(nova.NovoEstado))
+        return Results.BadRequest(new { mensagem = "Estado inválido." });
+    if (string.IsNullOrWhiteSpace(nova.Descricao))
+        return Results.BadRequest(new { mensagem = "Descreve o que foi feito." });
+    if (string.IsNullOrWhiteSpace(nova.Autor))
+        return Results.BadRequest(new { mensagem = "Falta o autor." });
+
+    var agora = DateTime.UtcNow;
+
+    db.Intervencoes.Add(new Intervencao
+    {
+        AvariaId = avaria.Id,
+        Data = agora,
+        Descricao = Limpar(nova.Descricao, 4000),
+        Autor = Limpar(nova.Autor, 150)
+    });
+
+    if (mudaEstado && nova.NovoEstado != avaria.Estado)
+    {
+        avaria.Estado = nova.NovoEstado!;
+        avaria.ResolvidaEm = avaria.Estado == EstadosAvaria.Resolvida ? agora : null;
+    }
+
+    await db.SaveChangesAsync();
+    return Results.Ok(new { mensagem = "Intervenção registada." });
+});
+
+app.MapDelete("/api/avarias/{id:int}", async (int id, NexuVigContext db) =>
+{
+    var avaria = await db.Avarias.FirstOrDefaultAsync(a => a.Id == id);
+    if (avaria is null) return Results.NotFound(new { mensagem = "Avaria não encontrada." });
+
+    // As intervenções são apagadas em cascata.
+    db.Avarias.Remove(avaria);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { mensagem = "Avaria apagada." });
 });
 
 app.MapPost("/api/medicoes", async (DadosEquipamento dados, HttpContext contexto, NexuVigContext db) =>

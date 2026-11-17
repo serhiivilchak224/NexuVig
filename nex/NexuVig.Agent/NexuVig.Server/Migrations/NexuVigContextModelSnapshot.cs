@@ -23,6 +23,50 @@ namespace NexuVig.Server.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("NexuVig.Server.Models.Avaria", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Autor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ComputadorId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CriadaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Prioridade")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ResolvidaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ComputadorId");
+
+                    b.ToTable("Avarias");
+                });
+
             modelBuilder.Entity("NexuVig.Server.Models.Computador", b =>
                 {
                     b.Property<int>("Id")
@@ -67,6 +111,35 @@ namespace NexuVig.Server.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Computadores");
+                });
+
+            modelBuilder.Entity("NexuVig.Server.Models.Intervencao", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Autor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("AvariaId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Data")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AvariaId");
+
+                    b.ToTable("Intervencoes");
                 });
 
             modelBuilder.Entity("NexuVig.Server.Models.Medicao", b =>
@@ -146,6 +219,28 @@ namespace NexuVig.Server.Migrations
                     b.ToTable("Utilizadores");
                 });
 
+            modelBuilder.Entity("NexuVig.Server.Models.Avaria", b =>
+                {
+                    b.HasOne("NexuVig.Server.Models.Computador", "Computador")
+                        .WithMany("Avarias")
+                        .HasForeignKey("ComputadorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Computador");
+                });
+
+            modelBuilder.Entity("NexuVig.Server.Models.Intervencao", b =>
+                {
+                    b.HasOne("NexuVig.Server.Models.Avaria", "Avaria")
+                        .WithMany("Intervencoes")
+                        .HasForeignKey("AvariaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Avaria");
+                });
+
             modelBuilder.Entity("NexuVig.Server.Models.Medicao", b =>
                 {
                     b.HasOne("NexuVig.Server.Models.Computador", "Computador")
@@ -157,8 +252,15 @@ namespace NexuVig.Server.Migrations
                     b.Navigation("Computador");
                 });
 
+            modelBuilder.Entity("NexuVig.Server.Models.Avaria", b =>
+                {
+                    b.Navigation("Intervencoes");
+                });
+
             modelBuilder.Entity("NexuVig.Server.Models.Computador", b =>
                 {
+                    b.Navigation("Avarias");
+
                     b.Navigation("Medicoes");
                 });
 #pragma warning restore 612, 618

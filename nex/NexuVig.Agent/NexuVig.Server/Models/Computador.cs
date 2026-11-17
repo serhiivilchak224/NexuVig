@@ -19,4 +19,5 @@ public class Computador
     public bool Aprovado { get; set; } = true;
 
     public List<Medicao> Medicoes { get; set; } = new();
+    public List<Avaria> Avarias { get; set; } = new();
 }
