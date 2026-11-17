@@ -105,7 +105,7 @@ else
                 <input @bind="novo.Utilizador" maxlength="30" autocomplete="off" placeholder="ex.: jsilva" />
             </label>
             <label class="nv-campo">
-                <span>Palavra-passe (mínimo 10 caracteres)</span>
+                <span>Palavra-passe (mínimo 10 caracteres, não pode ser comum)</span>
                 @* Campo de texto com os caracteres escondidos (e não type="password"): assim o browser
                    não oferece guardar a palavra-passe da conta nova como se fosse a de quem está a criar. *@
                 <input @bind="novo.Password" type="text" class="nv-oculto" autocomplete="off" spellcheck="false" />

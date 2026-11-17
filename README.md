@@ -69,6 +69,7 @@ O Dashboard tem dois perfis:
 - As contas criam-se na página **Utilizadores** (só administradores) e ficam na tabela `Utilizadores` da base de dados. A palavra-passe nunca é guardada: o Server guarda um hash PBKDF2 (SHA-256, sal aleatório, 210 000 iterações).
 - A conta definida em `NexuVig:Admin:Utilizador` / `NexuVig:Admin:Password` continua a funcionar como **conta de recuperação** (sempre Administrador), para não ficar sem acesso se as outras forem apagadas.
 - Os endpoints de contas (`/api/autenticacao`, `/api/utilizadores`) só aceitam pedidos com a chave do Dashboard: os utilizadores nunca falam diretamente com o Server. Os perfis são aplicados pelo Dashboard, que esconde e bloqueia as ações que o perfil não permite.
+- Ao criar uma conta, o Server recusa palavras-passe fracas: menos de 10 caracteres, palavras-passe comuns (listas de palavras-passe divulgadas), só números, poucos caracteres diferentes, ou que contenham o utilizador, o nome ou "nexuvig".
 - Limitação conhecida: uma sessão aberta dura até 8 horas, mesmo que a conta seja removida entretanto.
 
 ### Avarias e intervenções
