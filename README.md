@@ -110,6 +110,8 @@ O Server e o Dashboard podem correr online (Docker, Render), com a base de dados
 4. Na VM: rede "Host-Only", snapshot antes de instalar, e o Agent com `EnderecoServer` = `https://192.168.56.1:7259`.
 5. O Dashboard lê o endereço do Server em `NexuVig:EnderecoServer` (appsettings.json).
 
+**Segurança da base de dados (Supabase):** todas as tabelas têm Row Level Security (RLS) ativo e sem políticas (migração `AtivarRls`). Assim, a API automática do Supabase (Data API) não consegue ler nem escrever nada; só o Server, que se liga como dono das tabelas, tem acesso. Ao criar uma tabela nova, ativar o RLS na mesma migração.
+
 Para criar novas migrações: `dotnet tool restore` e depois `dotnet ef migrations add NomeDaMigracao --project nex/NexuVig.Agent/NexuVig.Server --output-dir Migrations`.
 
 ## Autor
