@@ -412,8 +412,17 @@ h1:focus {
     display: grid;
     gap: .35rem;
     align-content: start;
+    min-width: 0;
     font-size: .9rem;
 }
+
+    /* As caixas ocupam a largura da coluna (sem isto passavam por cima da coluna seguinte). */
+    .nv-campo input,
+    .nv-campo select,
+    .nv-campo textarea {
+        width: 100%;
+        box-sizing: border-box;
+    }
 
     .nv-campo input,
     .nv-campo select {

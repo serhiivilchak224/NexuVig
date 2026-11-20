@@ -109,12 +109,12 @@ else
                 }
             </label>
             <label class="nv-campo">
-                <span>Palavra-passe (mínimo 8 caracteres)</span>
+                <span>Palavra-passe</span>
                 @* Campo de texto com os caracteres escondidos (e não type="password"): assim o browser
                    não oferece guardar a palavra-passe da conta nova como se fosse a de quem está a criar. *@
                 @* Os botões ficam ao lado da caixa, para ela ter a mesma altura que as outras. *@
                 <div class="nv-campo-grupo">
-                    <input @bind="novo.Password" type="text" class="@(mostrarPassword ? "" : "nv-oculto")" autocomplete="off" spellcheck="false" />
+                    <input @bind="novo.Password" type="text" class="@(mostrarPassword ? "" : "nv-oculto")" autocomplete="off" spellcheck="false" placeholder="mín. 8 caracteres" />
                     <button type="button" class="nv-botao-icone" title="Gerar uma palavra-passe" aria-label="Gerar uma palavra-passe" @onclick="GerarPassword">
                         <i class="bi bi-magic" aria-hidden="true"></i>
                     </button>
