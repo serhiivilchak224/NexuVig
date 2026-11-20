@@ -10,14 +10,14 @@ public static class Sessao
     public static bool EAdministrador(ClaimsPrincipal utilizador) =>
         utilizador.IsInRole(Perfis.Administrador);
 
-    // Ex.: "Professor João Silva (joao)"
+    // Perfil e nome de quem registou, ex.: "Técnico Pedro" ou "Administrador admin".
     public static string Autor(ClaimsPrincipal utilizador)
     {
-        string conta = utilizador.Identity?.Name ?? "";
-        string nome = utilizador.FindFirst("nome")?.Value ?? "";
+        string? nome = utilizador.FindFirst("nome")?.Value;
+        if (string.IsNullOrWhiteSpace(nome)) nome = utilizador.Identity?.Name ?? "";
 
-        if (string.IsNullOrWhiteSpace(nome) || nome == conta) return conta;
-        return string.IsNullOrWhiteSpace(conta) ? nome : $"{nome} ({conta})";
+        string perfil = Perfis.Nome(utilizador.FindFirst(ClaimTypes.Role)?.Value);
+        return string.IsNullOrWhiteSpace(perfil) ? nome : $"{perfil} {nome}";
     }
 
     // O Server responde com { "mensagem": "..." } nos erros.

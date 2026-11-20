@@ -112,15 +112,16 @@ else
                 <span>Palavra-passe (mínimo 8 caracteres)</span>
                 @* Campo de texto com os caracteres escondidos (e não type="password"): assim o browser
                    não oferece guardar a palavra-passe da conta nova como se fosse a de quem está a criar. *@
-                <input @bind="novo.Password" type="text" class="@(mostrarPassword ? "" : "nv-oculto")" autocomplete="off" spellcheck="false" />
-                <span class="nv-detalhe">
-                    <button type="button" class="nv-botao nv-botao-pequeno" @onclick="GerarPassword">
-                        <i class="bi bi-magic" aria-hidden="true"></i> Gerar
+                @* Os botões ficam ao lado da caixa, para ela ter a mesma altura que as outras. *@
+                <div class="nv-campo-grupo">
+                    <input @bind="novo.Password" type="text" class="@(mostrarPassword ? "" : "nv-oculto")" autocomplete="off" spellcheck="false" />
+                    <button type="button" class="nv-botao-icone" title="Gerar uma palavra-passe" aria-label="Gerar uma palavra-passe" @onclick="GerarPassword">
+                        <i class="bi bi-magic" aria-hidden="true"></i>
                     </button>
-                    <button type="button" class="nv-botao nv-botao-pequeno" @onclick="() => mostrarPassword = !mostrarPassword">
-                        <i class="bi @(mostrarPassword ? "bi-eye-slash" : "bi-eye")" aria-hidden="true"></i> @(mostrarPassword ? "Esconder" : "Mostrar")
+                    <button type="button" class="nv-botao-icone" title="@(mostrarPassword ? "Esconder" : "Mostrar")" aria-label="@(mostrarPassword ? "Esconder" : "Mostrar")" @onclick="() => mostrarPassword = !mostrarPassword">
+                        <i class="bi @(mostrarPassword ? "bi-eye-slash" : "bi-eye")" aria-hidden="true"></i>
                     </button>
-                </span>
+                </div>
             </label>
             <label class="nv-campo">
                 <span>Perfil</span>
