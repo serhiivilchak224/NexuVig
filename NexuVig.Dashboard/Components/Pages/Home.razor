@@ -72,6 +72,67 @@
     </div>
 </div>
 
+@if (pendentes.Count > 0)
+{
+    <div class="nv-cartao" style="margin-bottom: 1.25rem;">
+        <div class="nv-cartao-cabecalho">
+            <span><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Por aprovar</span>
+            <span class="nv-subtitulo" style="margin: 0; font-weight: 400;">@pendentes.Count à espera · os dados só contam depois de aprovares</span>
+        </div>
+
+        <div class="nv-tabela-scroll">
+            <table class="nv-tabela">
+                <thead>
+                    <tr>
+                        <th>Equipamento</th>
+                        <th>Sistema</th>
+                        <th>Último contacto</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var pc in pendentes.OrderBy(e => e.Nome))
+                    {
+                        var ip = Monitorizacao.IpPrincipal(pc);
+
+                        <tr>
+                            <td>
+                                <span class="nv-nome">@pc.Nome</span>
+                                <div class="nv-detalhe">@(ip ?? "sem IP") · @pc.AgentId</div>
+                            </td>
+                            <td>
+                                <div>@(string.IsNullOrWhiteSpace(pc.SistemaOperativo) ? "—" : pc.SistemaOperativo)</div>
+                                <div class="nv-detalhe">@pc.Processador</div>
+                            </td>
+                            <td>@Monitorizacao.TempoDesde(pc.DataHora)</td>
+                            <td style="white-space: nowrap; text-align: right;">
+                                @if (eAdministrador)
+                                {
+                                    <button class="nv-botao" disabled="@aGerir" @onclick="() => Aprovar(pc)">
+                                        <i class="bi bi-check-lg" aria-hidden="true"></i> Aprovar
+                                    </button>
+                                    <button class="nv-botao" disabled="@aGerir" @onclick="() => Rejeitar(pc)">
+                                        <i class="bi bi-x-lg" aria-hidden="true"></i> Rejeitar
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="nv-detalhe">Só um administrador pode aprovar</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (erroGestao is not null)
+        {
+            <div class="nv-detalhe" style="padding: .75rem 1.25rem; color: var(--nv-perigo);">@erroGestao</div>
+        }
+    </div>
+}
+
 <div class="nv-cartao">
     <div class="nv-cartao-cabecalho">
         <span>Equipamentos</span>
@@ -123,20 +184,32 @@
                             <td>
                                 <span class="nv-pilula @(online ? "nv-ok" : "nv-perigo")">@(online ? "Online" : "Offline")</span>
                             </td>
-                            <td>
-                                <BarraUso Percentagem="pc.UtilizacaoCPU" />
-                            </td>
-                            <td>
-                                <BarraUso Percentagem="pc.UtilizacaoRAM" />
-                            </td>
-                            <td>
-                                <BarraUso Percentagem="100 - discoLivre" Texto="@($"{discoLivre:F1}%")" />
-                            </td>
+                            @if (Monitorizacao.SemMedicoes(pc))
+                            {
+                                @* Acabado de aprovar: ainda não chegou nenhuma medição. *@
+                                <td colspan="3"><span class="nv-detalhe">À espera da primeira medição...</span></td>
+                            }
+                            else
+                            {
+                                <td>
+                                    <BarraUso Percentagem="pc.UtilizacaoCPU" />
+                                </td>
+                                <td>
+                                    <BarraUso Percentagem="pc.UtilizacaoRAM" />
+                                </td>
+                                <td>
+                                    <BarraUso Percentagem="100 - discoLivre" Texto="@($"{discoLivre:F1}%")" />
+                                </td>
+                            }
                             <td>
                                 @if (Monitorizacao.CpuAlta(pc)) { <span class="nv-etiqueta nv-perigo">CPU alta</span> }
                                 @if (Monitorizacao.RamAlta(pc)) { <span class="nv-etiqueta nv-perigo">RAM alta</span> }
                                 @if (Monitorizacao.DiscoCheio(pc)) { <span class="nv-etiqueta nv-aviso">Disco cheio</span> }
-                                @if (!Monitorizacao.TemAlerta(pc)) { <span class="nv-detalhe">—</span> }
+                                @if (avariasAbertas.TryGetValue(pc.AgentId, out int numeroAvarias))
+                                {
+                                    <a class="nv-etiqueta nv-aviso" href="/avarias" style="text-decoration: none;">@(numeroAvarias == 1 ? "1 avaria" : $"{numeroAvarias} avarias")</a>
+                                }
+                                @if (!Monitorizacao.TemAlerta(pc) && !avariasAbertas.ContainsKey(pc.AgentId)) { <span class="nv-detalhe">—</span> }
                             </td>
                         </tr>
                     }
@@ -149,7 +222,16 @@
 @code {
     private const int SegundosEntreAtualizacoes = 5;
 
+    // Aprovados: contam para o painel. Pendentes: registaram-se sozinhos e esperam aprovação.
     private List<DadosEquipamento> equipamentos = new();
+    private List<DadosEquipamento> pendentes = new();
+    private bool aGerir;
+    private Dictionary<string, int> avariasAbertas = new();
+    private bool eAdministrador;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? EstadoAutenticacao { get; set; }
+    private string? erroGestao;
     private bool? servidorOnline;
     private DateTimeOffset? ultimaAtualizacao;
     private bool aAtualizar;
@@ -161,6 +243,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (EstadoAutenticacao is not null)
+            eAdministrador = (await EstadoAutenticacao).User.IsInRole(Perfis.Administrador);
+
         await CarregarDados();
 
         temporizador = new System.Threading.Timer(async _ =>
@@ -178,7 +263,20 @@
         try
         {
             var resposta = await Http.GetFromJsonAsync<List<DadosEquipamento>>("/api/medicoes");
-            equipamentos = resposta ?? new();
+            var todos = resposta ?? new();
+            equipamentos = todos.Where(e => e.Aprovado).ToList();
+            pendentes = todos.Where(e => !e.Aprovado).ToList();
+
+            try
+            {
+                var avarias = await Http.GetFromJsonAsync<List<AvariaResumo>>("/api/avarias?estado=abertas") ?? new();
+                avariasAbertas = avarias.GroupBy(a => a.AgentId).ToDictionary(g => g.Key, g => g.Count());
+            }
+            catch (Exception erro)
+            {
+                // Sem a lista de avarias o painel continua a funcionar (só sem as etiquetas).
+                Console.WriteLine($"Erro ao carregar avarias: {erro.Message}");
+            }
             servidorOnline = true;
             ultimaAtualizacao = DateTimeOffset.UtcNow;
         }
@@ -201,6 +299,35 @@
         await Task.WhenAll(CarregarDados(), Task.Delay(400));
 
         aAtualizar = false;
+    }
+
+    private Task Aprovar(DadosEquipamento pc) =>
+        Gerir(() => Http.PostAsync($"/api/computadores/{pc.AgentId}/aprovar", null));
+
+    private Task Rejeitar(DadosEquipamento pc) =>
+        Gerir(() => Http.DeleteAsync($"/api/computadores/{pc.AgentId}"));
+
+    private async Task Gerir(Func<Task<HttpResponseMessage>> pedido)
+    {
+        if (aGerir || !eAdministrador) return;
+
+        aGerir = true;
+        erroGestao = null;
+
+        try
+        {
+            using var resposta = await pedido();
+            if (!resposta.IsSuccessStatusCode)
+                erroGestao = $"O Server recusou o pedido (HTTP {(int)resposta.StatusCode}).";
+        }
+        catch (Exception erro)
+        {
+            erroGestao = "Não foi possível contactar o Server.";
+            Console.WriteLine($"Erro na gestão de computadores: {erro.Message}");
+        }
+
+        await CarregarDados();
+        aGerir = false;
     }
 
     public void Dispose() => temporizador?.Dispose();

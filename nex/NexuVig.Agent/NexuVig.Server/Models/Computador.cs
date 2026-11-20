@@ -11,5 +11,13 @@ public class Computador
     public string UnidadeDisco { get; set; } = "";
     public DateTime UltimaComunicacao { get; set; }
 
+    // Registo automático: o Server guarda só o hash (SHA-256) do token do computador.
+    // Fica a null nos computadores que usam a chave partilhada (NexuVig:ChaveApi).
+    public string? TokenHash { get; set; }
+
+    // Um computador registado sozinho só conta depois de aprovado pelo administrador.
+    public bool Aprovado { get; set; } = true;
+
     public List<Medicao> Medicoes { get; set; } = new();
+    public List<Avaria> Avarias { get; set; } = new();
 }

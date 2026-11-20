@@ -1,0 +1,236 @@
+@page "/avarias"
+@inject HttpClient Http
+@inject NavigationManager Navegacao
+
+<PageTitle>NexuVig - Avarias</PageTitle>
+
+<div class="nv-cabecalho">
+    <div>
+        <h1 class="nv-titulo">Avarias</h1>
+        <div class="nv-subtitulo">Ocorrências nos equipamentos e o que foi feito para as resolver</div>
+    </div>
+
+    <div class="nv-acoes">
+        <div class="nv-filtros">
+            <button class="nv-botao @(filtro == "abertas" ? "nv-botao-ativo" : "")" @onclick='() => MudarFiltro("abertas")'>Por resolver</button>
+            <button class="nv-botao @(filtro == "resolvidas" ? "nv-botao-ativo" : "")" @onclick='() => MudarFiltro("resolvidas")'>Resolvidas</button>
+            <button class="nv-botao @(filtro == "todas" ? "nv-botao-ativo" : "")" @onclick='() => MudarFiltro("todas")'>Todas</button>
+        </div>
+    </div>
+</div>
+
+<div class="nv-cartao" style="margin-bottom: 1.25rem;">
+    <div class="nv-cartao-cabecalho">
+        <span>@TituloLista</span>
+        <span class="nv-subtitulo" style="margin: 0; font-weight: 400;">@avarias.Count no total</span>
+    </div>
+
+    @if (aCarregar)
+    {
+        <div class="nv-vazio">A carregar...</div>
+    }
+    else if (avarias.Count == 0)
+    {
+        <div class="nv-vazio">
+            <i class="bi bi-tools" aria-hidden="true"></i>
+            <div>@(filtro == "abertas" ? "Não há avarias por resolver." : "Não há avarias para mostrar.")</div>
+        </div>
+    }
+    else
+    {
+        <div class="nv-tabela-scroll">
+            <table class="nv-tabela">
+                <thead>
+                    <tr>
+                        <th>Avaria</th>
+                        <th>Equipamento</th>
+                        <th>Prioridade</th>
+                        <th>Estado</th>
+                        <th>Atualizada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in avarias)
+                    {
+                        <tr>
+                            <td>
+                                <a class="nv-nome" href="/avarias/@a.Id">@a.Titulo</a>
+                                <div class="nv-detalhe">#@a.Id · registada por @a.Autor · @(a.NumeroIntervencoes == 1 ? "1 intervenção" : $"{a.NumeroIntervencoes} intervenções")</div>
+                            </td>
+                            <td><a class="nv-detalhe" href="/equipamento/@a.AgentId">@a.Computador</a></td>
+                            <td><span class="nv-pilula @ClassePrioridade(a.Prioridade)">@Prioridades.Nome(a.Prioridade)</span></td>
+                            <td><span class="nv-pilula @ClasseEstado(a.Estado)">@EstadosAvaria.Nome(a.Estado)</span></td>
+                            <td><span class="nv-detalhe">@Monitorizacao.TempoDesde(a.UltimaAtualizacao)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="nv-cartao">
+    <div class="nv-cartao-cabecalho"><span>Registar avaria</span></div>
+
+    <div class="nv-formulario">
+        <label class="nv-campo">
+            <span>Equipamento</span>
+            <select @bind="nova.AgentId">
+                <option value="">— escolher —</option>
+                @foreach (var pc in equipamentos.OrderBy(e => e.Nome))
+                {
+                    <option value="@pc.AgentId">@pc.Nome</option>
+                }
+            </select>
+        </label>
+        <label class="nv-campo">
+            <span>Prioridade</span>
+            <select @bind="nova.Prioridade">
+                <option value="@Prioridades.Baixa">Baixa</option>
+                <option value="@Prioridades.Media">Média</option>
+                <option value="@Prioridades.Alta">Alta</option>
+            </select>
+        </label>
+        <label class="nv-campo nv-campo-largo">
+            <span>Título</span>
+            <input @bind="nova.Titulo" maxlength="150" placeholder="ex.: Não liga à rede; ecrã sem imagem; disco quase cheio" />
+        </label>
+        <label class="nv-campo nv-campo-largo">
+            <span>Descrição (o que acontece, desde quando, quem reportou)</span>
+            <textarea @bind="nova.Descricao" rows="4" maxlength="4000"></textarea>
+        </label>
+
+        <div class="nv-formulario-acoes">
+            <button class="nv-botao" disabled="@aGuardar" @onclick="Registar">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Registar avaria
+            </button>
+            @if (mensagem is not null)
+            {
+                <span class="nv-detalhe" style="color: var(--nv-perigo);">@mensagem</span>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    // ?equipamento=AgentId: vem da página do equipamento, já com ele escolhido.
+    [SupplyParameterFromQuery(Name = "equipamento")]
+    public string? EquipamentoInicial { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? EstadoAutenticacao { get; set; }
+
+    private string filtro = "abertas";
+    private List<AvariaResumo> avarias = new();
+    private List<DadosEquipamento> equipamentos = new();
+    private NovaAvaria nova = new();
+    private bool aCarregar = true;
+    private bool aGuardar;
+    private string? mensagem;
+
+    private string TituloLista => filtro switch
+    {
+        "resolvidas" => "Resolvidas",
+        "todas" => "Todas as avarias",
+        _ => "Por resolver"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        nova.AgentId = EquipamentoInicial ?? "";
+
+        try
+        {
+            var lista = await Http.GetFromJsonAsync<List<DadosEquipamento>>("/api/medicoes") ?? new();
+            equipamentos = lista.Where(e => e.Aprovado).ToList();
+        }
+        catch (Exception erro)
+        {
+            mensagem = "Não foi possível contactar o Server.";
+            Console.WriteLine($"Erro ao carregar equipamentos: {erro.Message}");
+        }
+
+        await Carregar();
+    }
+
+    private async Task Carregar()
+    {
+        aCarregar = true;
+
+        try
+        {
+            avarias = await Http.GetFromJsonAsync<List<AvariaResumo>>($"/api/avarias?estado={filtro}") ?? new();
+        }
+        catch (Exception erro)
+        {
+            mensagem = "Não foi possível contactar o Server.";
+            Console.WriteLine($"Erro ao carregar avarias: {erro.Message}");
+        }
+
+        aCarregar = false;
+    }
+
+    private async Task MudarFiltro(string novo)
+    {
+        filtro = novo;
+        await Carregar();
+    }
+
+    private async Task Registar()
+    {
+        if (aGuardar) return;
+        aGuardar = true;
+        mensagem = null;
+
+        try
+        {
+            if (EstadoAutenticacao is not null)
+                nova.Autor = Sessao.Autor((await EstadoAutenticacao).User);
+
+            using var resposta = await Http.PostAsJsonAsync("/api/avarias", nova);
+
+            if (resposta.IsSuccessStatusCode)
+            {
+                var criada = await resposta.Content.ReadFromJsonAsync<AvariaCriada>();
+                if (criada is not null)
+                {
+                    Navegacao.NavigateTo($"/avarias/{criada.Id}");
+                    return;
+                }
+
+                nova = new();
+                await Carregar();
+            }
+            else
+            {
+                mensagem = await Sessao.MensagemErro(resposta);
+            }
+        }
+        catch (Exception erro)
+        {
+            mensagem = "Não foi possível contactar o Server.";
+            Console.WriteLine($"Erro ao registar avaria: {erro.Message}");
+        }
+
+        aGuardar = false;
+    }
+
+    public static string ClassePrioridade(string prioridade) => prioridade switch
+    {
+        Prioridades.Alta => "nv-perigo",
+        Prioridades.Media => "nv-aviso",
+        _ => "nv-neutro"
+    };
+
+    public static string ClasseEstado(string estado) => estado switch
+    {
+        EstadosAvaria.Resolvida => "nv-ok",
+        EstadosAvaria.EmCurso => "nv-aviso",
+        _ => "nv-perigo"
+    };
+
+    private sealed class AvariaCriada
+    {
+        public int Id { get; set; }
+    }
+}

@@ -1,13 +1,8 @@
 using System;
 using System.IO;
-using System.Management;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
-using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,6 +17,15 @@ namespace NexuVig.Agent
         ILogger<Worker> logger,
         IConfiguration configuracao) : BackgroundService
     {
+        // Token deste computador (registo automático). Fica numa pasta que só
+        // o sistema e os administradores conseguem ler (criada pelo instalador).
+        private static string FicheiroToken => Path.Combine(
+            Recolha.PastaDados, "seguro", "agent-token.txt");
+
+        // Estado da ligação, lido pelo programa NexuVig (janela).
+        private static string FicheiroEstado => Path.Combine(
+            Recolha.PastaDados, "estado.txt");
+
         protected override async Task ExecuteAsync(
             CancellationToken stoppingToken)
         {
@@ -44,17 +48,21 @@ namespace NexuVig.Agent
                     "Configura um endereço HTTPS válido em " +
                     "NexuVig:EnderecoServer no appsettings.json.");
 
+                EscreverEstado("Endereço do Server inválido");
                 return;
             }
 
             var enderecoMedicoes = new Uri(
                 enderecoServer, "/api/medicoes");
 
+            var enderecoRegisto = new Uri(
+                enderecoServer, "/api/registo");
+
             string agentId;
 
             try
             {
-                agentId = ObterAgentId();
+                agentId = Recolha.ObterAgentId();
             }
             catch (Exception erro)
             {
@@ -65,24 +73,19 @@ namespace NexuVig.Agent
                 return;
             }
 
+            // Dois modos:
+            // - com NexuVig:ChaveApi (chave partilhada, instalada pelo administrador);
+            // - sem chave: o Agent regista-se sozinho e recebe um token próprio,
+            //   ficando à espera de aprovação no Dashboard.
             string? chaveApi = configuracao["NexuVig:ChaveApi"];
-
-            if (string.IsNullOrWhiteSpace(chaveApi))
-            {
-                logger.LogError(
-                    "Falta a chave NexuVig:ChaveApi na configuração " +
-                    "(User Secrets em desenvolvimento; como serviço, " +
-                    "variável NexuVig__ChaveApi no registo do serviço).");
-
-                return;
-            }
+            bool modoChave = !string.IsNullOrWhiteSpace(chaveApi);
+            string? token = modoChave ? null : LerToken();
+            DateTime proximoRegisto = DateTime.MinValue;
 
             using var cliente = new HttpClient
             {
-                Timeout = TimeSpan.FromSeconds(10)
+                Timeout = TimeSpan.FromSeconds(60)
             };
-
-            cliente.DefaultRequestHeaders.Add("X-Api-Key", chaveApi);
 
             var opcoesJSON = new JsonSerializerOptions
             {
@@ -90,15 +93,16 @@ namespace NexuVig.Agent
             };
 
             logger.LogInformation(
-                "Agent {AgentId} iniciado. Destino: {Endereco}",
+                "Agent {AgentId} iniciado ({Modo}). Destino: {Endereco}",
                 agentId,
+                modoChave ? "chave partilhada" : "registo automático",
                 enderecoMedicoes);
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    DadosEquipamento dados = RecolherDados(agentId);
+                    DadosEquipamento dados = Recolha.Recolher(agentId);
 
                     string json = JsonSerializer.Serialize(
                         dados, opcoesJSON);
@@ -108,11 +112,43 @@ namespace NexuVig.Agent
                     logger.LogDebug(
                         "Dados recolhidos:\n{Json}", json);
 
-                    await EnviarDadosAsync(
-                        cliente,
-                        enderecoMedicoes,
-                        dados,
-                        stoppingToken);
+                    if (!modoChave && token is null &&
+                        DateTime.UtcNow >= proximoRegisto)
+                    {
+                        token = await RegistarAsync(
+                            cliente,
+                            enderecoRegisto,
+                            dados,
+                            stoppingToken);
+
+                        // Se falhar, só volta a tentar passados 10 minutos.
+                        if (token is null)
+                        {
+                            proximoRegisto =
+                                DateTime.UtcNow.AddMinutes(10);
+                        }
+                    }
+
+                    if (modoChave || token is not null)
+                    {
+                        bool tokenRecusado = await EnviarDadosAsync(
+                            cliente,
+                            enderecoMedicoes,
+                            dados,
+                            modoChave ? "X-Api-Key" : "X-Agent-Token",
+                            modoChave ? chaveApi! : token!,
+                            stoppingToken);
+
+                        // O Server já não conhece este token (por exemplo, o
+                        // administrador removeu o computador): regista-se de novo.
+                        if (tokenRecusado && !modoChave)
+                        {
+                            ApagarToken();
+                            token = null;
+                            proximoRegisto =
+                                DateTime.UtcNow.AddMinutes(10);
+                        }
+                    }
                 }
                 catch (OperationCanceledException)
                     when (stoppingToken.IsCancellationRequested)
@@ -124,6 +160,8 @@ namespace NexuVig.Agent
                     logger.LogWarning(
                         "O Server demorou demasiado a responder. " +
                         "Nova tentativa no próximo ciclo.");
+
+                    EscreverEstado("Sem ligação ao Server");
                 }
                 catch (HttpRequestException erro)
                 {
@@ -131,6 +169,8 @@ namespace NexuVig.Agent
                         erro,
                         "Não foi possível comunicar com o Server. " +
                         "Nova tentativa no próximo ciclo.");
+
+                    EscreverEstado("Sem ligação ao Server");
                 }
                 catch (Exception erro)
                 {
@@ -156,16 +196,94 @@ namespace NexuVig.Agent
             logger.LogInformation("Agent terminado.");
         }
 
-        private async Task EnviarDadosAsync(
+        // Pede ao Server um token para este computador. Devolve null se falhar.
+        private async Task<string?> RegistarAsync(
             HttpClient cliente,
             Uri endereco,
             DadosEquipamento dados,
             CancellationToken stoppingToken)
         {
+            var pedido = new PedidoRegisto
+            {
+                AgentId = dados.AgentId,
+                Nome = dados.Nome
+            };
+
             using var resposta = await cliente.PostAsJsonAsync(
                 endereco,
-                dados,
+                pedido,
                 stoppingToken);
+
+            if (!resposta.IsSuccessStatusCode)
+            {
+                string detalhe = await resposta.Content.ReadAsStringAsync(
+                    stoppingToken);
+
+                logger.LogWarning(
+                    "O Server não aceitou o registo. " +
+                    "Estado HTTP: {Estado} | Resposta: {Detalhe}",
+                    (int)resposta.StatusCode,
+                    detalhe);
+
+                EscreverEstado(
+                    resposta.StatusCode == HttpStatusCode.Conflict
+                        ? "Já registado: pede ao administrador para remover este computador no painel"
+                        : "Registo recusado pelo Server");
+
+                return null;
+            }
+
+            RespostaRegisto? registo =
+                await resposta.Content.ReadFromJsonAsync<RespostaRegisto>(
+                    stoppingToken);
+
+            if (string.IsNullOrWhiteSpace(registo?.Token))
+            {
+                logger.LogWarning(
+                    "O Server respondeu ao registo sem token.");
+
+                return null;
+            }
+
+            GuardarToken(registo.Token);
+
+            logger.LogInformation(
+                "Computador registado no Server. " +
+                "Fica à espera de aprovação do administrador.");
+
+            return registo.Token;
+        }
+
+        // Devolve true quando o Server recusou as credenciais (401).
+        private async Task<bool> EnviarDadosAsync(
+            HttpClient cliente,
+            Uri endereco,
+            DadosEquipamento dados,
+            string cabecalho,
+            string segredo,
+            CancellationToken stoppingToken)
+        {
+            using var pedido = new HttpRequestMessage(
+                HttpMethod.Post, endereco)
+            {
+                Content = JsonContent.Create(dados)
+            };
+
+            pedido.Headers.Add(cabecalho, segredo);
+
+            using var resposta = await cliente.SendAsync(
+                pedido,
+                stoppingToken);
+
+            if (resposta.StatusCode == HttpStatusCode.Accepted)
+            {
+                // 202: registado, mas ainda não aprovado no Dashboard.
+                logger.LogDebug(
+                    "Computador à espera de aprovação do administrador.");
+
+                EscreverEstado("À espera de aprovação do administrador");
+                return false;
+            }
 
             if (resposta.IsSuccessStatusCode)
             {
@@ -175,7 +293,8 @@ namespace NexuVig.Agent
                     dados.Nome,
                     (int)resposta.StatusCode);
 
-                return;
+                EscreverEstado("Ligado ao Server");
+                return false;
             }
 
             string detalhe = await resposta.Content.ReadAsStringAsync(
@@ -186,205 +305,71 @@ namespace NexuVig.Agent
                 "Estado HTTP: {Estado} | Resposta: {Detalhe}",
                 (int)resposta.StatusCode,
                 detalhe);
+
+            EscreverEstado(
+                $"O Server recusou os dados (HTTP {(int)resposta.StatusCode})");
+
+            return resposta.StatusCode == HttpStatusCode.Unauthorized;
         }
 
-        private string ObterAgentId()
+        private string? LerToken()
         {
-            string pasta = Path.Combine(
-                // CommonApplicationData (C:\ProgramData): igual para o
-                // Serviço do Windows e para execução normal, o ID não muda.
-                Environment.GetFolderPath(
-                    Environment.SpecialFolder.CommonApplicationData),
-                "NexuVig");
-
-            Directory.CreateDirectory(pasta);
-
-            string ficheiro = Path.Combine(pasta, "agent-id.txt");
-
-            if (File.Exists(ficheiro))
+            try
             {
-                string valor = File.ReadAllText(ficheiro).Trim();
-
-                if (!Guid.TryParse(valor, out Guid id) ||
-                    id == Guid.Empty)
+                if (!File.Exists(FicheiroToken))
                 {
-                    throw new InvalidDataException(
-                        "O ficheiro agent-id.txt contém " +
-                        "um identificador inválido.");
+                    return null;
                 }
 
-                return id.ToString();
+                string valor = File.ReadAllText(FicheiroToken).Trim();
+                return valor.Length == 0 ? null : valor;
             }
-
-            string novoId = Guid.NewGuid().ToString();
-
-            File.WriteAllText(ficheiro, novoId);
-
-            return novoId;
-        }
-
-        [SupportedOSPlatform("windows")]
-        private DadosEquipamento RecolherDados(string agentId)
-        {
-            var dados = new DadosEquipamento
+            catch (Exception erro)
             {
-                AgentId = agentId,
-                Nome = Environment.MachineName,
-                SistemaOperativo = RuntimeInformation.OSDescription,
-                DataHora = DateTimeOffset.UtcNow,
-                TempoLigadoSegundos = Environment.TickCount64 / 1000
-            };
+                logger.LogWarning(
+                    erro, "Não foi possível ler o token do Agent.");
 
-            string raiz = Path.GetPathRoot(
-                Environment.SystemDirectory)!;
-
-            DriveInfo disco = new DriveInfo(raiz);
-
-            dados.UnidadeDisco = disco.Name;
-
-            dados.DiscoTotalGiB =
-                disco.TotalSize / Math.Pow(1024, 3);
-
-            dados.DiscoLivreGiB =
-                disco.AvailableFreeSpace / Math.Pow(1024, 3);
-
-            RecolherRede(dados);
-            RecolherProcessador(dados);
-            RecolherCPU(dados);
-            RecolherMemoria(dados);
-
-            return dados;
-        }
-
-        private void RecolherRede(DadosEquipamento dados)
-        {
-            foreach (NetworkInterface placa
-                in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (placa.OperationalStatus != OperationalStatus.Up ||
-                    placa.NetworkInterfaceType ==
-                        NetworkInterfaceType.Loopback)
-                {
-                    continue;
-                }
-
-                foreach (UnicastIPAddressInformation endereco
-                    in placa.GetIPProperties().UnicastAddresses)
-                {
-                    if (endereco.Address.AddressFamily !=
-                            AddressFamily.InterNetwork ||
-                        IPAddress.IsLoopback(endereco.Address))
-                    {
-                        continue;
-                    }
-
-                    string ip = endereco.Address.ToString();
-
-                    if (!dados.EnderecosIPv4.Contains(ip))
-                    {
-                        dados.EnderecosIPv4.Add(ip);
-                    }
-                }
+                return null;
             }
         }
 
-        [SupportedOSPlatform("windows")]
-        private void RecolherProcessador(DadosEquipamento dados)
+        private void GuardarToken(string token)
         {
-            using var pesquisa = new ManagementObjectSearcher(
-                "SELECT Name FROM Win32_Processor");
+            Directory.CreateDirectory(
+                Path.GetDirectoryName(FicheiroToken)!);
 
-            using var resultados = pesquisa.Get();
-
-            foreach (ManagementObject processador in resultados)
-            {
-                using (processador)
-                {
-                    dados.Processador =
-                        processador["Name"]?.ToString()?.Trim()
-                        ?? "Desconhecido";
-
-                    return;
-                }
-            }
-
-            throw new InvalidOperationException(
-                "Não foi possível identificar o processador.");
+            File.WriteAllText(FicheiroToken, token);
         }
 
-        [SupportedOSPlatform("windows")]
-        private void RecolherCPU(DadosEquipamento dados)
+        private void ApagarToken()
         {
-            using var pesquisa = new ManagementObjectSearcher(
-                "SELECT PercentProcessorTime " +
-                "FROM Win32_PerfFormattedData_PerfOS_Processor " +
-                "WHERE Name = '_Total'");
-
-            using var resultados = pesquisa.Get();
-
-            foreach (ManagementObject cpu in resultados)
+            try
             {
-                using (cpu)
-                {
-                    if (cpu["PercentProcessorTime"] is null)
-                    {
-                        throw new InvalidOperationException(
-                            "O contador da CPU não devolveu um valor.");
-                    }
-
-                    dados.UtilizacaoCPU = Convert.ToDouble(
-                        cpu["PercentProcessorTime"]);
-
-                    return;
-                }
+                File.Delete(FicheiroToken);
             }
-
-            throw new InvalidOperationException(
-                "O contador da CPU não está disponível.");
+            catch (Exception erro)
+            {
+                logger.LogWarning(
+                    erro, "Não foi possível apagar o token do Agent.");
+            }
         }
 
-        [SupportedOSPlatform("windows")]
-        private void RecolherMemoria(DadosEquipamento dados)
+        // Uma linha: estado | data e hora (UTC). Se falhar, o Agent continua.
+        private void EscreverEstado(string estado)
         {
-            using var pesquisa = new ManagementObjectSearcher(
-                "SELECT TotalVisibleMemorySize, FreePhysicalMemory " +
-                "FROM Win32_OperatingSystem");
-
-            using var resultados = pesquisa.Get();
-
-            foreach (ManagementObject sistema in resultados)
+            try
             {
-                using (sistema)
-                {
-                    double totalKB = Convert.ToDouble(
-                        sistema["TotalVisibleMemorySize"]);
+                Directory.CreateDirectory(Recolha.PastaDados);
 
-                    double livreKB = Convert.ToDouble(
-                        sistema["FreePhysicalMemory"]);
-
-                    if (totalKB <= 0 ||
-                        livreKB < 0 ||
-                        livreKB > totalKB)
-                    {
-                        throw new InvalidOperationException(
-                            "O Windows devolveu valores de RAM inválidos.");
-                    }
-
-                    dados.MemoriaTotalGiB =
-                        totalKB / (1024 * 1024);
-
-                    dados.MemoriaDisponivelGiB =
-                        livreKB / (1024 * 1024);
-
-                    dados.UtilizacaoRAM =
-                        (totalKB - livreKB) / totalKB * 100;
-
-                    return;
-                }
+                File.WriteAllText(
+                    FicheiroEstado,
+                    $"{estado}|{DateTimeOffset.UtcNow:O}");
             }
-
-            throw new InvalidOperationException(
-                "Não foi possível recolher a memória RAM.");
+            catch (Exception erro)
+            {
+                logger.LogDebug(
+                    erro, "Não foi possível escrever o estado.");
+            }
         }
     }
 }

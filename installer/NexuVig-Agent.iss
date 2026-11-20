@@ -1,14 +1,22 @@
-﻿; Instalador do NexuVig Agent (Inno Setup 6.3 ou superior)
+﻿; Instalador do NexuVig (Inno Setup 6.3 ou superior)
 ;
-; Instala o Agent em C:\Program Files\NexuVig\Agent, regista-o como Servico do
-; Windows ("NexuVig Agent", arranque automatico atrasado) e guarda o endereco do
-; Server e a chave de API no proprio servico (nunca em ficheiros do programa).
+; Instala em C:\Program Files\NexuVig\Agent:
+; - o Agent, registado como Servico do Windows ("NexuVig Agent", arranque automatico
+;   atrasado), que envia os dados do computador ao Server;
+; - o programa NexuVig (janela), onde o utilizador ve os dados do seu computador.
+;
+; Sem chave de API, o Agent regista-se sozinho no Server e fica a espera de aprovacao
+; do administrador no Dashboard. Com chave (instalacao feita pelo administrador), fica
+; logo aprovado. O endereco e a chave ficam no proprio servico, nunca em ficheiros.
 ;
 ; Como criar o Setup.exe: executar installer\criar-instalador.cmd
-; Instalacao silenciosa: NexuVig-Agent-Setup.exe /VERYSILENT /SERVER=https://... /CHAVE=...
+; Instalacao silenciosa: NexuVig-Setup.exe /VERYSILENT [/SERVER=https://...] [/CHAVE=...]
 
-#define NomeApp "NexuVig Agent"
-#define VersaoApp "1.0.0"
+#define NomeApp "NexuVig"
+#define ServidorPorDefeito "https://nexuvig-server.onrender.com"
+#ifndef VersaoApp
+  #define VersaoApp "1.1.0"
+#endif
 
 [Setup]
 AppId={{5C0D22E1-4ADD-49C1-B39F-740B6C265FF3}
@@ -22,23 +30,34 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=output
-OutputBaseFilename=NexuVig-Agent-Setup
+OutputBaseFilename=NexuVig-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 SetupLogging=yes
 UninstallDisplayName={#NomeApp}
-UninstallDisplayIcon={app}\NexuVig.Agent.exe
+UninstallDisplayIcon={app}\NexuVig.exe
 
 [Languages]
 Name: "pt"; MessagesFile: "compiler:Languages\Portuguese.isl"
 
+[Tasks]
+Name: "atalhoambiente"; Description: "Criar um atalho no ambiente de trabalho"; Flags: unchecked
+
 [Files]
 Source: "..\publish\Agent\NexuVig.Agent.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\publish\App\NexuVig.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\publish\Agent\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion
 ; Opcional: se existir installer\servidor.cer, o certificado do Server e instalado
 ; como de confianca neste computador (necessario com certificados autoassinados).
 Source: "servidor.cer"; DestDir: "{tmp}"; Flags: skipifsourcedoesntexist deleteafterinstall
+
+[Icons]
+Name: "{autoprograms}\NexuVig"; Filename: "{app}\NexuVig.exe"
+Name: "{autodesktop}\NexuVig"; Filename: "{app}\NexuVig.exe"; Tasks: atalhoambiente
+
+[Run]
+Filename: "{app}\NexuVig.exe"; Description: "Abrir o NexuVig"; Flags: nowait postinstall skipifsilent
 
 [Code]
 const
@@ -78,8 +97,8 @@ begin
 
   if Pos('https://', LowerCase(Endereco)) <> 1 then
     Mensagem := 'O endereço do Server tem de começar por https://'
-  else if Length(Chave) < 16 then
-    Mensagem := 'A chave de API parece demasiado curta (mínimo de 16 caracteres).'
+  else if (Chave <> '') and (Length(Chave) < 16) then
+    Mensagem := 'A chave de API parece demasiado curta (mínimo de 16 caracteres). Sem chave, deixa o campo vazio.'
   else
     Result := True;
 end;
@@ -89,12 +108,12 @@ begin
   PaginaServidor := CreateInputQueryPage(wpSelectDir,
     'Ligação ao Server',
     'Onde está o Server do NexuVig?',
-    'Indica o endereço do Server (HTTPS) e a chave de API fornecida pelo administrador.');
+    'Podes continuar sem alterar nada. A chave é só para o administrador.');
   PaginaServidor.Add('Endereço do Server:', False);
-  PaginaServidor.Add('Chave de API:', True);
+  PaginaServidor.Add('Chave de API (opcional):', True);
 
   // Valores por defeito; na instalação silenciosa vêm de /SERVER= e /CHAVE=
-  PaginaServidor.Values[0] := ExpandConstant('{param:SERVER|https://localhost:7259}');
+  PaginaServidor.Values[0] := ExpandConstant('{param:SERVER|{#ServidorPorDefeito}}');
   PaginaServidor.Values[1] := ExpandConstant('{param:CHAVE|}');
 end;
 
@@ -129,7 +148,7 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  Executavel, Certificado, Ambiente: String;
+  Executavel, Certificado, Ambiente, PastaSegura: String;
   Codigo: Integer;
 begin
   if CurStep <> ssPostInstall then
@@ -154,10 +173,20 @@ begin
 
   // O serviço não lê User Secrets: o endereço e a chave ficam em variáveis de ambiente
   // do próprio serviço (valor Environment, REG_MULTI_SZ), lidas pelo Agent.
-  Ambiente := 'NexuVig__EnderecoServer=' + Trim(PaginaServidor.Values[0]) + #0 +
-              'NexuVig__ChaveApi=' + Trim(PaginaServidor.Values[1]);
+  // Sem chave, o Agent regista-se sozinho (token próprio) e espera aprovação.
+  Ambiente := 'NexuVig__EnderecoServer=' + Trim(PaginaServidor.Values[0]);
+  if Trim(PaginaServidor.Values[1]) <> '' then
+    Ambiente := Ambiente + #0 + 'NexuVig__ChaveApi=' + Trim(PaginaServidor.Values[1]);
   RegWriteMultiStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + NomeServico,
     'Environment', Ambiente);
+
+  // Pasta do token do Agent: só o sistema (S-1-5-18) e os administradores (S-1-5-32-544)
+  // a conseguem ler. Os utilizadores normais não conseguem copiar o token.
+  PastaSegura := ExpandConstant('{commonappdata}\NexuVig\seguro');
+  ForceDirectories(PastaSegura);
+  Exec(ExpandConstant('{sys}\icacls.exe'), '"' + PastaSegura +
+    '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F',
+    '', SW_HIDE, ewWaitUntilTerminated, Codigo);
 
   Certificado := ExpandConstant('{tmp}\servidor.cer');
   if FileExists(Certificado) then

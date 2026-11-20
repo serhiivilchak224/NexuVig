@@ -375,3 +375,131 @@ h1:focus {
     .blazor-error-boundary::after {
         content: "Ocorreu um erro.";
     }
+
+/* Sessão (nome e perfil de quem entrou) */
+.nv-sessao {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: 0 .75rem;
+    font-size: .9rem;
+}
+
+@media (max-width: 760px) {
+    .nv-sessao {
+        display: none;
+    }
+}
+
+    .nv-sessao > i {
+        font-size: 1.5rem;
+        color: var(--bs-secondary-color);
+    }
+
+.nv-sessao-nome {
+    font-weight: 600;
+}
+
+/* Formulários (página Utilizadores) */
+.nv-formulario {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    padding: 1.25rem;
+}
+
+.nv-campo {
+    display: grid;
+    gap: .35rem;
+    font-size: .9rem;
+}
+
+    .nv-campo input,
+    .nv-campo select {
+        padding: .55rem .7rem;
+        border-radius: 8px;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        font-size: .95rem;
+    }
+
+.nv-formulario-acoes {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* Palavra-passe escondida sem type="password" (o browser não oferece guardá-la) */
+.nv-oculto {
+    -webkit-text-security: disc;
+}
+
+/* Avarias */
+.nv-filtros {
+    display: flex;
+    gap: .4rem;
+    flex-wrap: wrap;
+}
+
+.nv-botao-ativo {
+    background: var(--nv-acento-suave);
+    color: var(--nv-acento);
+    border-color: var(--nv-acento);
+}
+
+.nv-campo-largo {
+    grid-column: 1 / -1;
+}
+
+.nv-campo textarea {
+    padding: .55rem .7rem;
+    border-radius: 8px;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    font: inherit;
+    font-size: .95rem;
+    resize: vertical;
+}
+
+.nv-texto {
+    padding: 1rem 1.25rem;
+    white-space: pre-wrap;
+    line-height: 1.55;
+}
+
+.nv-texto-curto {
+    white-space: pre-wrap;
+    margin-top: .25rem;
+}
+
+.nv-historico {
+    list-style: none;
+    margin: 0;
+    padding: .5rem 1.25rem 1rem;
+}
+
+    .nv-historico li {
+        position: relative;
+        padding: .75rem 0 .75rem 1.25rem;
+        border-left: 2px solid var(--nv-borda);
+    }
+
+        .nv-historico li::before {
+            content: "";
+            position: absolute;
+            left: -6px;
+            top: 1.05rem;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--nv-acento);
+        }
+
+.nv-botao-pequeno {
+    padding: .2rem .55rem;
+    font-size: .8rem;
+}

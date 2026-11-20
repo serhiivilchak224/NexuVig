@@ -25,5 +25,8 @@ namespace NexuVig.Shared
         public double DiscoLivreGiB { get; set; }
 
         public long TempoLigadoSegundos { get; set; }
+
+        // Preenchido pelo Server: false enquanto o administrador não aprovar o computador.
+        public bool Aprovado { get; set; } = true;
     }
 }

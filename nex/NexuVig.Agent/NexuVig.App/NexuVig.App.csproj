@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Programa NexuVig: janela que mostra ao utilizador os dados deste computador
+       (os mesmos que o Agent envia) e o estado da ligação ao Server. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>NexuVig</AssemblyName>
+    <RootNamespace>NexuVig.App</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A recolha de dados é o mesmo ficheiro do Agent (não há código repetido). -->
+    <Compile Include="..\NexuVig.Agent\Recolha.cs" Link="Recolha.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NexuVig.Shared\NexuVig.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

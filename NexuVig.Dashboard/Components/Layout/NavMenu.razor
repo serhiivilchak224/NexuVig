@@ -10,7 +10,27 @@
         <NavLink class="nv-link" href="" Match="NavLinkMatch.All">
             <i class="bi bi-grid-1x2" aria-hidden="true"></i> Painel
         </NavLink>
+
+        <NavLink class="nv-link" href="avarias">
+            <i class="bi bi-tools" aria-hidden="true"></i> Avarias
+        </NavLink>
+
+        <AuthorizeView Roles="@Perfis.Administrador">
+            <NavLink class="nv-link" href="utilizadores">
+                <i class="bi bi-people" aria-hidden="true"></i> Utilizadores
+            </NavLink>
+        </AuthorizeView>
     </nav>
+
+    <AuthorizeView>
+        <div class="nv-sessao">
+            <i class="bi bi-person-circle" aria-hidden="true"></i>
+            <div>
+                <div class="nv-sessao-nome">@(context.User.FindFirst("nome")?.Value ?? context.User.Identity?.Name)</div>
+                <div class="nv-detalhe">@Perfis.Nome(context.User.FindFirst(ClaimTypes.Role)?.Value)</div>
+            </div>
+        </div>
+    </AuthorizeView>
 
     <button class="nv-link nv-tema" @onclick="MudarTema">
         <i class="bi @(temaEscuro ? "bi-sun" : "bi-moon-stars")" aria-hidden="true"></i>

@@ -1,0 +1,239 @@
+@page "/avarias/{Id:int}"
+@* O nome do ficheiro (PaginaAvaria) evita conflito com a classe NexuVig.Shared.AvariaDetalhe. *@
+@inject HttpClient Http
+@inject NavigationManager Navegacao
+
+<PageTitle>NexuVig - @(avaria?.Titulo ?? "Avaria")</PageTitle>
+
+<a href="/avarias" class="nv-voltar"><i class="bi bi-arrow-left" aria-hidden="true"></i> Voltar às avarias</a>
+
+@if (aCarregar)
+{
+    <div class="nv-cartao nv-vazio">A carregar...</div>
+}
+else if (avaria is null)
+{
+    <div class="nv-cartao nv-vazio">
+        <i class="bi bi-question-circle" aria-hidden="true"></i>
+        <div>@(mensagem ?? "Avaria não encontrada.")</div>
+    </div>
+}
+else
+{
+    <div class="nv-cabecalho">
+        <div>
+            <h1 class="nv-titulo">@avaria.Titulo</h1>
+            <div class="nv-subtitulo">
+                #@avaria.Id · <a href="/equipamento/@avaria.AgentId">@avaria.Computador</a> ·
+                registada por @avaria.Autor em @avaria.CriadaEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+            </div>
+        </div>
+        <div class="nv-acoes">
+            <span class="nv-pilula @Avarias.ClassePrioridade(avaria.Prioridade)">Prioridade @Prioridades.Nome(avaria.Prioridade).ToLowerInvariant()</span>
+            <span class="nv-pilula @Avarias.ClasseEstado(avaria.Estado)">@EstadosAvaria.Nome(avaria.Estado)</span>
+
+            @if (eAdministrador)
+            {
+                if (!aConfirmarApagar)
+                {
+                    <button class="nv-botao" @onclick="() => aConfirmarApagar = true">
+                        <i class="bi bi-trash" aria-hidden="true"></i> Apagar
+                    </button>
+                }
+                else
+                {
+                    <button class="nv-botao" style="color: var(--nv-perigo);" disabled="@aGuardar" @onclick="Apagar">Confirmar</button>
+                    <button class="nv-botao" disabled="@aGuardar" @onclick="() => aConfirmarApagar = false">Cancelar</button>
+                }
+            }
+        </div>
+    </div>
+
+    @if (avaria.ResolvidaEm is DateTimeOffset resolvida)
+    {
+        <div class="nv-alerta nv-ok">
+            <i class="bi bi-check-circle" aria-hidden="true"></i>
+            <span>Resolvida em @resolvida.ToLocalTime().ToString("dd/MM/yyyy HH:mm") (@Duracao(resolvida - avaria.CriadaEm) depois de registada).</span>
+        </div>
+    }
+
+    <div class="nv-cartao" style="margin-bottom: 1.25rem;">
+        <div class="nv-cartao-cabecalho"><span>Descrição</span></div>
+        <div class="nv-texto">@(string.IsNullOrWhiteSpace(avaria.Descricao) ? "Sem descrição." : avaria.Descricao)</div>
+    </div>
+
+    <div class="nv-cartao" style="margin-bottom: 1.25rem;">
+        <div class="nv-cartao-cabecalho">
+            <span>Intervenções</span>
+            <span class="nv-subtitulo" style="margin: 0; font-weight: 400;">@avaria.Intervencoes.Count no total</span>
+        </div>
+
+        @if (avaria.Intervencoes.Count == 0)
+        {
+            <div class="nv-vazio">
+                <i class="bi bi-wrench" aria-hidden="true"></i>
+                <div>Ainda não há intervenções.</div>
+            </div>
+        }
+        else
+        {
+            <ol class="nv-historico">
+                @foreach (var i in avaria.Intervencoes)
+                {
+                    <li>
+                        <div class="nv-detalhe">@i.Data.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @i.Autor</div>
+                        <div class="nv-texto-curto">@i.Descricao</div>
+                    </li>
+                }
+            </ol>
+        }
+    </div>
+
+    <div class="nv-cartao">
+        <div class="nv-cartao-cabecalho"><span>Registar intervenção</span></div>
+
+        <div class="nv-formulario">
+            <label class="nv-campo nv-campo-largo">
+                <span>O que foi feito (diagnóstico, reparação, peça substituída...)</span>
+                <textarea @bind="nova.Descricao" rows="3" maxlength="4000"></textarea>
+            </label>
+            <label class="nv-campo">
+                <span>Estado da avaria depois desta intervenção</span>
+                <select @bind="nova.NovoEstado">
+                    <option value="">Manter (@EstadosAvaria.Nome(avaria.Estado))</option>
+                    @if (avaria.Estado != EstadosAvaria.EmCurso)
+                    {
+                        <option value="@EstadosAvaria.EmCurso">Em curso</option>
+                    }
+                    @if (avaria.Estado != EstadosAvaria.Resolvida)
+                    {
+                        <option value="@EstadosAvaria.Resolvida">Resolvida</option>
+                    }
+                    else
+                    {
+                        <option value="@EstadosAvaria.Aberta">Reabrir</option>
+                    }
+                </select>
+            </label>
+
+            <div class="nv-formulario-acoes">
+                <button class="nv-botao" disabled="@aGuardar" @onclick="RegistarIntervencao">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i> Registar intervenção
+                </button>
+                @if (mensagem is not null)
+                {
+                    <span class="nv-detalhe" style="color: var(--nv-perigo);">@mensagem</span>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? EstadoAutenticacao { get; set; }
+
+    private AvariaDetalhe? avaria;
+    private NovaIntervencao nova = new();
+    private bool aCarregar = true;
+    private bool aGuardar;
+    private bool aConfirmarApagar;
+    private bool eAdministrador;
+    private string? mensagem;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (EstadoAutenticacao is not null)
+            eAdministrador = Sessao.EAdministrador((await EstadoAutenticacao).User);
+
+        await Carregar();
+        aCarregar = false;
+    }
+
+    private async Task Carregar()
+    {
+        try
+        {
+            using var resposta = await Http.GetAsync($"/api/avarias/{Id}");
+
+            if (resposta.IsSuccessStatusCode)
+                avaria = await resposta.Content.ReadFromJsonAsync<AvariaDetalhe>();
+            else if (resposta.StatusCode == System.Net.HttpStatusCode.NotFound)
+                avaria = null;
+            else
+                mensagem = await Sessao.MensagemErro(resposta);
+        }
+        catch (Exception erro)
+        {
+            mensagem = "Não foi possível contactar o Server.";
+            Console.WriteLine($"Erro ao carregar a avaria: {erro.Message}");
+        }
+    }
+
+    private async Task RegistarIntervencao()
+    {
+        if (aGuardar) return;
+        aGuardar = true;
+        mensagem = null;
+
+        try
+        {
+            if (EstadoAutenticacao is not null)
+                nova.Autor = Sessao.Autor((await EstadoAutenticacao).User);
+
+            using var resposta = await Http.PostAsJsonAsync($"/api/avarias/{Id}/intervencoes", nova);
+
+            if (resposta.IsSuccessStatusCode)
+            {
+                nova = new();
+                await Carregar();
+            }
+            else
+            {
+                mensagem = await Sessao.MensagemErro(resposta);
+            }
+        }
+        catch (Exception erro)
+        {
+            mensagem = "Não foi possível contactar o Server.";
+            Console.WriteLine($"Erro ao registar intervenção: {erro.Message}");
+        }
+
+        aGuardar = false;
+    }
+
+    private async Task Apagar()
+    {
+        if (aGuardar || !eAdministrador) return;
+        aGuardar = true;
+
+        try
+        {
+            using var resposta = await Http.DeleteAsync($"/api/avarias/{Id}");
+
+            if (resposta.IsSuccessStatusCode)
+            {
+                Navegacao.NavigateTo("/avarias");
+                return;
+            }
+
+            mensagem = await Sessao.MensagemErro(resposta);
+        }
+        catch (Exception erro)
+        {
+            mensagem = "Não foi possível contactar o Server.";
+            Console.WriteLine($"Erro ao apagar a avaria: {erro.Message}");
+        }
+
+        aGuardar = false;
+    }
+
+    private static string Duracao(TimeSpan tempo)
+    {
+        if (tempo.TotalMinutes < 60) return $"{Math.Max(1, (int)tempo.TotalMinutes)} min";
+        if (tempo.TotalHours < 24) return $"{(int)tempo.TotalHours} h {tempo.Minutes} min";
+        return $"{(int)tempo.TotalDays} d {tempo.Hours} h";
+    }
+}
